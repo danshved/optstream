@@ -1,0 +1,38 @@
+cabal-version:       >=1.10
+
+name:                optstream
+version:             0.1.0.0
+synopsis:            Command line parsing with twice-applicative substream parsers.
+-- description:
+homepage:            https://github.com/danshved/optstream
+-- bug-reports:
+license:             BSD3
+license-file:        LICENSE
+author:              Dan Shved <danshved@gmail.com>
+maintainer:          Dan Shved <danshved@gmail.com>
+-- copyright:
+-- category:
+build-type:          Simple
+extra-source-files:  CHANGELOG.md
+
+library
+  exposed-modules:     Options.OptStream,
+                       Options.OptStream.Classes,
+                       Options.OptStream.Raw,
+                       Options.OptStream.Help
+  other-modules:       Options.OptStream.Internal
+  -- other-extensions:
+  build-depends:       base >=4.11
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+test-suite optstream-test
+  default-language:    Haskell2010
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      tests
+  main-is:             OptStreamTest.hs
+  build-depends:       base,
+                       optstream,
+                       QuickCheck >=2.2,
+                       test-framework,
+                       test-framework-quickcheck2
