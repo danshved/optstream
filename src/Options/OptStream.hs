@@ -361,7 +361,7 @@ short name = lift0 . R.short name
 --
 -- >>> let p = flag' ["-a"] <|> quiet (flag' ["-b"]) <|> flag' ["-c"]
 -- >>> runParserIO p []
--- <interactive>: Missing command line argument: -a | -c.
+-- <interactive>: missing command line argument: -a | -c
 quiet :: Parser a -> Parser a
 quiet = lift1 R.quiet
 
@@ -491,7 +491,7 @@ flag' = lift0 . R.flag'
 -- ("foo", "bar")
 --
 -- >>> runParserIO foobar ["-fb"]
--- <interactive>: Unexpected character 'b' in command line argument "-fb".
+-- <interactive>: unexpected character 'b' in command line argument "-fb"
 flagSep :: [OptionForm]
            -- ^ Flag forms, e.g. @["-f", "--foo"]@.
         -> String
@@ -555,9 +555,9 @@ addParamHelp func opts metavar desc =
 -- >>> runParserIO p ["--input="]
 -- ""
 -- >>> runParserIO p ["--input"]
--- <interactive>: Missing command line argument after "--input": FILENAME.
+-- <interactive>: missing command line argument after "--input": FILENAME
 -- >>> runParserIO p []
--- <interactive>: Missing command line argument: --input | --input=FILENAME | -i | -iFILENAME.
+-- <interactive>: missing command line argument: --input | --input=FILENAME | -i | -iFILENAME
 --
 -- ==== __Example (optional parameter):__
 --
@@ -595,7 +595,7 @@ param' opts metavar = lift0 $ R.param' opts metavar
 -- 42
 --
 -- >>> runParserIO p ["--number=fourty_two"]
--- <interactive>: Command line error at "--number=fourty_two": Prelude.read: no parse
+-- <interactive>: command line error at "--number=fourty_two": Prelude.read: no parse
 paramRead :: Read a
           => [OptionForm]
              -- ^ All parameter forms, e.g. @["-n", "--number"]@.
@@ -631,7 +631,7 @@ paramRead' opts metavar = lift0 $ R.paramRead' opts metavar
 -- '\n'
 --
 -- >>> runParserIO p ["-sabc"]
--- <interactive>: Command line error at "-sabc": Expected one character, got 3.
+-- <interactive>: command line error at "-sabc": expected one character, got 3
 paramChar :: [OptionForm]
              -- ^ All parameter forms, e.g. @["-s", "--separator"]@.
           -> String
@@ -673,9 +673,9 @@ addFreeArgHelp func' metavar desc = freeArgHelp metavar desc $ func' metavar
 -- >>> runParserIO p [""]
 -- ""
 -- >>> runParserIO p ["--foo"]
--- <interactive>: Unexpected command line argument "--foo".
+-- <interactive>: unexpected command line argument "--foo"
 -- >>> runParserIO p []
--- <interactive>: Missing command line argument: FILENAME.
+-- <interactive>: missing command line argument: FILENAME
 --
 -- ==== __Example (optional argument):__
 --
@@ -711,7 +711,7 @@ freeArg' = lift0 . R.freeArg'
 -- 2.718
 --
 -- >>> runParserIO p ["foo"]
--- <interactive>: Command line error at "foo": Prelude.read: no parse
+-- <interactive>: command line error at "foo": Prelude.read: no parse
 freeArgRead :: Read a
             => String
                -- ^ Metavariable for help and error messages.
@@ -741,10 +741,10 @@ freeArgRead' = lift0 . R.freeArgRead'
 -- 'x'
 --
 -- >>> runParserIO p ["-"]
--- <interactive>: Unexpected command line argument "-".
+-- <interactive>: unexpected command line argument "-"
 --
 -- >>> runParserIO p [""]
--- <interactive>: Command line error at "": Expected one character, got zero.
+-- <interactive>: command line error at "": expected one character, got zero
 freeArgChar :: String
                -- ^ Metavariable for help and error messages.
             -> String
@@ -814,10 +814,10 @@ anyArg' = lift0 . R.anyArg'
 -- Person {name = "John", age = 20}
 --
 -- >>> runParserIO personP ["--person"]
--- <interactive>: Missing command line argument after "--person": NAME.
+-- <interactive>: missing command line argument after "--person": NAME
 --
 -- >>> runParserIO personP ["--person", "John"]
--- <interactive>: Missing command line argument after "--person" "John": AGE.
+-- <interactive>: missing command line argument after "--person" "John": AGE
 multiParam :: [OptionForm]
               -- ^ All multi-parameter forms, e.g. @["-p", "--person"]@.
            -> Follower a
@@ -853,7 +853,7 @@ addNextHelp func metavar = Follower (func metavar) metavar
 -- 42
 --
 -- >>> runParserIO p ["-n", "42.0"]
--- <interactive>: Command line error at "42.0": Prelude.read: no parse
+-- <interactive>: command line error at "42.0": Prelude.read: no parse
 nextRead :: Read a
          => String
             -- ^ Metavariable for help and error messages.
@@ -868,7 +868,7 @@ nextRead = addNextHelp R.nextRead
 -- ('a','b')
 --
 -- >>> runParserIO p ["--pair", "ab"]
--- <interactive>: Command line error at "ab": Expected one character, got 2.
+-- <interactive>: command line error at "ab": expected one character, got 2
 nextChar :: String
             -- ^ Metavariable for help and error messages.
          -> Follower Char
@@ -1035,7 +1035,7 @@ withVersion' = lift1 . R.withVersion'
 -- of @--@ we have 'anyArg' that will accept anything.
 --
 -- >>> ./dashes --fake-option
--- dashes: Unexpected command line argument "--fake-option".
+-- dashes: unexpected command line argument "--fake-option"
 -- Try "dashes --help" for more information.
 --
 -- >>> ./dashes -- --fake-option
@@ -1304,7 +1304,7 @@ withSubHelp' = clearHelp . withHelp
 -- >>> runParserIO (param' ["--foo"] "FOO") ["--foo=bar"]
 -- "bar"
 -- >>> runParserIO (param' ["--foo"] "FOO") []
--- <interactive>: Missing command line argument: --foo | --foo=FOO.
+-- <interactive>: missing command line argument: --foo | --foo=FOO
 runParserIO :: Parser a -> [String] -> IO a
 runParserIO = R.runParserIO . toRaw
 

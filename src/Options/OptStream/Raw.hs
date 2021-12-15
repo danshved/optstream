@@ -114,24 +114,24 @@ data ParserError
 -- | Formats a 'ParserError' to a human-readable string.
 formatParserError :: ParserError -> String
 formatParserError (UnexpectedArg arg) =
-  "Unexpected command line argument " ++ show arg ++ "."
+  "unexpected command line argument " ++ show arg
 formatParserError (UnexpectedChar c arg) =
-  "Unexpected character " ++ show c
-  ++ " in command line argument " ++ show arg ++ "."
+  "unexpected character " ++ show c
+  ++ " in command line argument " ++ show arg
 formatParserError (MissingArgAfter args metavar) =
-  "Missing command line argument after "
+  "missing command line argument after "
   ++ (concat . intersperse " " . map show $ args)
-  ++ ": " ++ metavar ++ "."
+  ++ ": " ++ metavar
 formatParserError (MissingArg ctx ss) =
-  "Missing command line argument"
+  "missing command line argument"
   ++ ( case ctx of
          CtxArg arg -> " before " ++ show arg
          CtxShort arg c -> " before flag " ++ show c ++ " in " ++ show arg
          CtxStart -> ""
          CtxEnd -> "" )
-  ++ ": " ++ (concat . intersperse " | " $ ss) ++ "."
+  ++ ": " ++ (concat . intersperse " | " $ ss)
 formatParserError (CustomError ctx msg) =
-  "Command line error"
+  "command line error"
   ++ ( case ctx of
          CtxArg arg -> " at " ++ show arg
          CtxShort arg c -> " at flag " ++ show c ++ " in " ++ show arg
@@ -541,8 +541,8 @@ parseRead = readEither
 
 parseChar :: String -> Either String Char
 parseChar [c] = Right c
-parseChar [] = Left "Expected one character, got zero."
-parseChar s = Left $ "Expected one character, got " ++ show (length s) ++ "."
+parseChar [] = Left "expected one character, got zero"
+parseChar s = Left $ "expected one character, got " ++ show (length s)
 
 -- ** High level matchers
 
@@ -558,7 +558,7 @@ flag' :: [OptionForm]
          -- ^ Flag forms, e.g. @["-f", "--foo"]@.
       -> RawParser ()
          -- ^ A parser that succeeds upon consuming the flag.
-flag' [] = error "Empty list of option strings"
+flag' [] = error "empty list of option strings"
 flag' ss = asum $ map (flag1 . parseOptionForm) ss
 
 flagSep1 :: Option -> RawParser ()
@@ -570,7 +570,7 @@ flagSep' :: [OptionForm]
             -- ^ Flag forms, e.g. @["-f", "--foo"]@.
          -> RawParser ()
             -- ^ A parser that succeeds upon consuming the flag.
-flagSep' [] = error "Empty list of option strings"
+flagSep' [] = error "empty list of option strings"
 flagSep' ss = asum $ map (flagSep1 . parseOptionForm) ss
 
 
@@ -610,7 +610,7 @@ param' :: [OptionForm]
           -- ^ Metavariable for error messages.
        -> RawParser String
           -- ^ A parser that returns the parameter value.
-param' [] _ = error "Empty list of option strings"
+param' [] _ = error "empty list of option strings"
 param' opts metavar = asum $ map f opts where
   f opt = param1 (parseOptionForm opt) metavar
 
@@ -694,7 +694,7 @@ multiParam' :: [OptionForm]
             -> RawParser a
               -- ^ A parser that consumes the option form and the following
               -- arguments.
-multiParam' [] _ = error "Empty list of option strings"
+multiParam' [] _ = error "empty list of option strings"
 multiParam' opts ra = asum $ map f opts where
   f opt = multiParam1 (parseOptionForm opt) ra
 
@@ -763,5 +763,3 @@ withVersionIO' :: String
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' s = fmap (join . versionToIO) . withVersion' s
 
--- TODO: Figure out if error messages should start with a capital letter and
---       finish with a full stop.

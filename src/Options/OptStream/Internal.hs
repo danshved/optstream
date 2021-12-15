@@ -97,7 +97,7 @@ isLegalOptionForm = isJust . parseOptionForm_
 parseOptionForm :: OptionForm -> Option
 parseOptionForm s = case parseOptionForm_ s of
   Just x -> x
-  Nothing -> error $ "Illegal option form " ++ show s
+  Nothing -> error $ "illegal option form " ++ show s
 
 
 -- * Miscellaneous
