@@ -1538,7 +1538,7 @@ withVersionIO' :: String
                   -- ^ An existing 'Parser'.
                -> Parser (IO a)
                   -- ^ A wrapper that handles @--version@.
-withVersionIO' s = lift1 $ R.withVersionIO' s
+withVersionIO' = lift1 . R.withVersionIO'
 
 -- TODO: Add paragraph about IO-style parsers.
 -- TODO: Add paragraph about Raw.
@@ -1552,8 +1552,7 @@ withVersionIO' s = lift1 $ R.withVersionIO' s
 -- TODO: (?) Identify what type of grammars we are parsing here, exactly. Does
 --       it fit the established classification?
 
--- TODO: (?) find out how to integrate with bash auto-complete.
-
 -- TODO: check that REPL and code examples in Haddock run as advertised.
 -- TODO: (eventually) Figure out what other compilers we can run on, add
 --       "Portability" field to module descriptions.
+-- TODO: (?) find out how to integrate with bash auto-complete.

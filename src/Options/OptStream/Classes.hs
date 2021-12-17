@@ -55,8 +55,8 @@ import Data.Functor
 --
 -- prop> fmapOrFail f . fmapOrFail g = fmapOrFail (g >=> f)
 --
--- Additionally, if @f@ is a 'Monad', it is expected that failure is the same
--- as the monadic 'fail':
+-- Additionally, if @f@ is a 'MonadFail', it is expected that failure is the
+-- same as the monadic 'fail':
 --
 -- prop> fmapOrFail Left (return err) = fail err
 class Functor f => FunctorFail f where
@@ -73,7 +73,7 @@ class Functor f => FunctorFail f where
 
 -- | Like 'Control.Monad.liftM' but with a possibility for failure. Suitable as
 -- a drop-in implementation of 'fmapOrFail' for monads.
-fmapOrFailM :: Monad f => (a -> Either String b) -> f a -> f b
+fmapOrFailM :: MonadFail f => (a -> Either String b) -> f a -> f b
 fmapOrFailM f a = either fail return . f =<< a
 
 infixl 4 <$?>

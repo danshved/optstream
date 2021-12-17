@@ -190,11 +190,13 @@ instance ApplicativeFail RawFollower where
 
 instance Monad RawFollower where
   return = FollowerDone . Right
-  fail = FollowerDone . Left
 
   FollowerDone (Right a) >>= g = g a
   FollowerDone (Left e) >>= _ = FollowerDone $ Left e
   FollowerNext v f >>= g = FollowerNext v $ (>>= g) . f
+
+instance MonadFail RawFollower where
+  fail = FollowerDone . Left
 
 -- | See 'Options.OptStream.next'
 next :: String
@@ -353,7 +355,6 @@ instance ApplicativeFail RawParser where
 
 instance Monad RawParser where
   return = Done . Right
-  fail = Done . Left . DECustomError
 
   Done (Right a) >>= f = f a
   Done (Left e) >>= _ = Done $ Left e
@@ -366,6 +367,9 @@ instance Monad RawParser where
         Scan endH'' _ _ -> endH''
     argH' = (fmap . fmap) (>>= f) . argH
     shortH' = fmap (>>= f) . shortH
+
+instance MonadFail RawParser where
+  fail = Done . Left . DECustomError
 
 instance Alternative RawParser where
   empty = Scan (Left mempty) (const Nothing) (const Nothing)
