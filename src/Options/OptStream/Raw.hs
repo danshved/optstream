@@ -595,16 +595,22 @@ cutProperPrefix a b
 
 param1 :: Option -> String -> RawParser String
 param1 (Short c) metavar
-  =   block prefix
-            (\arg -> guard (arg == prefix) $> next metavar)
-  <|> block (prefix ++ metavar)
-            (fmap return . cutProperPrefix prefix)
+  =   block
+        prefix
+        (\arg -> guard (arg == prefix) $> next metavar)
+  <|> quiet ( block
+        (prefix ++ metavar)
+        (fmap return . cutProperPrefix prefix)
+      )
   where prefix = ['-', c]
 param1 (Long s) metavar
-  =   block prefix
-            (\arg -> guard (arg == prefix) $> next metavar)
-  <|> block (prefix ++ "=" ++ metavar)
-            (fmap return . cutPrefix (prefix ++ "="))
+  =   block
+        prefix
+        (\arg -> guard (arg == prefix) $> next metavar)
+  <|> quiet ( block
+        (prefix ++ "=" ++ metavar)
+        (fmap return . cutPrefix (prefix ++ "="))
+      )
   where prefix = "--" ++ s
 
 -- | See 'Options.OptStream.param''.

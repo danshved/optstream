@@ -22,7 +22,7 @@ library
                        Options.OptStream.Help
   other-modules:       Options.OptStream.Internal
   -- other-extensions:
-  build-depends:       base >=4.11
+  build-depends:       base >=4.13 && < 4.17
   hs-source-dirs:      src
   default-language:    Haskell2010
 

@@ -240,7 +240,7 @@ data Parser a = Parser
 -- Right "bar"
 --
 -- >>> runParser (param' ["--foo"] "FOO") []
--- Left (MissingArg CtxEnd ["--foo","--foo=FOO"])
+-- Left (MissingArg CtxEnd ["--foo"])
 runParser :: Parser a -> [String] -> Either ParserError a
 runParser = R.runParser . toRaw
 
@@ -550,20 +550,25 @@ addParamHelp func opts metavar desc =
 -- >>> let p = param ["-i", "--input"] "FILENAME" "Input filename."
 -- >>> runParserIO p ["-i", "foo.txt"]
 -- "foo.txt"
+--
 -- >>> runParserIO p ["--input=bar.txt"]
 -- "bar.txt"
+--
 -- >>> runParserIO p ["--input="]
 -- ""
+--
 -- >>> runParserIO p ["--input"]
 -- <interactive>: missing command line argument after "--input": FILENAME
+--
 -- >>> runParserIO p []
--- <interactive>: missing command line argument: --input | --input=FILENAME | -i | -iFILENAME
+-- <interactive>: missing command line argument: --input | -i
 --
 -- ==== __Example (optional parameter):__
 --
 -- >>> let p = param ["-n"] "NAME" "Your name. Default: James Bond." <|> orElse "James Bond"
 -- >>> runParserIO p ["-n", "Sherlock Holmes"]
 -- "Sherlock Holmes"
+--
 -- >>> runParserIO p []
 -- "James Bond"
 param :: [OptionForm]
@@ -669,11 +674,14 @@ addFreeArgHelp func' metavar desc = freeArgHelp metavar desc $ func' metavar
 --
 -- >>> let p = freeArg "FILENAME" "Input file."
 -- >>> runParserIO p ["input.txt"]
+--
 -- "input.txt"
 -- >>> runParserIO p [""]
 -- ""
+--
 -- >>> runParserIO p ["--foo"]
 -- <interactive>: unexpected command line argument "--foo"
+--
 -- >>> runParserIO p []
 -- <interactive>: missing command line argument: FILENAME
 --
@@ -682,6 +690,7 @@ addFreeArgHelp func' metavar desc = freeArgHelp metavar desc $ func' metavar
 -- >>> let p = freeArg "FILENAME" "Output file. Default: a.out." <|> orElse "a.out"
 -- >>> runParserIO p ["./binary"]
 -- "./binary"
+--
 -- >>> runParserIO p []
 -- "a.out"
 freeArg :: String
@@ -1303,8 +1312,9 @@ withSubHelp' = clearHelp . withHelp
 --
 -- >>> runParserIO (param' ["--foo"] "FOO") ["--foo=bar"]
 -- "bar"
+--
 -- >>> runParserIO (param' ["--foo"] "FOO") []
--- <interactive>: missing command line argument: --foo | --foo=FOO
+-- <interactive>: missing command line argument: --foo
 runParserIO :: Parser a -> [String] -> IO a
 runParserIO = R.runParserIO . toRaw
 
@@ -1543,9 +1553,6 @@ withVersionIO' = lift1 . R.withVersionIO'
 -- TODO: Add paragraph about IO-style parsers.
 -- TODO: Add paragraph about Raw.
 -- TODO: Add introductory paragraph with basic usage example.
-
--- TODO: (?) Make -fVALUE and --foo=VALUE options quiet in 'param'. Or maybe -f
--- and --foo.
 
 -- TODO: Check laws for all instances in this file.
 -- TODO: Figure out which laws there are in SubstreamParser.
