@@ -5,14 +5,85 @@ License     : BSD-3
 Maintainer  : danshved@gmail.com
 Stability   : experimental
 
-This module contains the 'Parser' type constructor to create command line
-parsers.  This is the only module you need to import for most uses of
-optstream.
+This module contains 'Parser', the twice-applicative type constructor for
+command line parsers. A basic example:
+
+@
+module Main where
+
+import Control.Applicative
+import Data.Functor
+import "Options.OptStream"
+
+data Options = Options
+  { strParam   :: String
+  , intParam   :: Int
+  , boolFlag   :: Bool
+  , positional :: String
+  }
+  deriving Show
+
+optionsP :: 'Parser' Options
+optionsP = Options
+  '<$>' ('param' ["-s", "--string"] \"STR\" "String parameter." '<|>' 'orElse' "")
+  '<#>' ('paramRead' ["-i", "--int"] \"INT\" "Integer parameter." '<|>' 'orElse' 0)
+  '<#>' ('flag' ["-b", "--bool"] "Boolean flag." '$>' True '<|>' 'orElse' False)
+  '<#>' ('freeArg' "\ARG\" "Positional argument.")
+
+main = do
+  opts <- 'parseArgsWithHelp'
+    $ 'header' "demo [options] ARG"
+    $ 'footer' "Example: demo -b --int=42 foo"
+    $ optionsP
+
+  putStrLn $ "String parameter   : " ++ show (strParam opts)
+  putStrLn $ "Integer parameter  : " ++ show (intParam opts)
+  putStrLn $ "Boolean flag       : " ++ show (boolFlag opts)
+  putStrLn $ "Positional argument: " ++ show (positional opts)
+@
+
+Note that in the code above:
+
+  * We build a parser from /atomic/ parsers. See 'flag', 'param', 'freeArg'.
+
+  * We combine them together using /parallel application/ '<#>', which allows
+  parsing the options in any order.
+
+  * We make options optional by using the 'Alternative' operator '<|>' together
+  with 'orElse'.
+
+  * We run the parser using 'parseArgsWithHelp', which takes care of handling
+  errors and printing @--help@.
+
+==== __Program outputs:__
+
+>>> ./demo -s foo -i 42 -b bar
+String parameter   : "foo"
+Integer parameter  : 42
+Boolean flag       : True
+Positional argument: "bar"
+
+>>> ./demo foo
+String parameter   : ""
+Integer parameter  : 0
+Boolean flag       : False
+Positional argument: "foo"
+
+>>> ./demo --help
+demo [options] ARG
+<BLANKLINE>
+  -s, --string=STR  String parameter.
+  -i, --int=INT     Integer parameter.
+  -b, --bool        Boolean flag.
+  ARG               Positional argument.
+      --help        Show this help message and exit.
+<BLANKLINE>
+Example: demo -b --int=42 foo
+
 -}
 module Options.OptStream
-  ( module Options.OptStream.Classes
-    -- * Parsers
-  , Parser
+  ( -- * Parsers
+    Parser
   , runParser
   , runParserIO
   , parseArgs
@@ -50,6 +121,9 @@ module Options.OptStream
   , nextRead
   , nextChar
   , nextMetavar
+
+    -- * Re-exported modules
+  , module Options.OptStream.Classes
 
     -- * Utilities
   , withHelp
@@ -1268,7 +1342,7 @@ withHelp' pa = eject pa $ flag' ["--help"] $> getHelp pa
 -- >>> runParserIO commandP ["send", "--to=foo@bar.com", "Hello, world!"]
 -- Right (Send "foo@bar.com" "Hello, world!")
 --
--- >>> runParserIO commandP ["fetch", "--limit=42"] 
+-- >>> runParserIO commandP ["fetch", "--limit=42"]
 -- Right (Fetch (Just 42))
 --
 -- >>> Left help <- runParserIO commandP ["--help"]
@@ -1552,7 +1626,6 @@ withVersionIO' = lift1 . R.withVersionIO'
 
 -- TODO: Add paragraph about IO-style parsers.
 -- TODO: Add paragraph about Raw.
--- TODO: Add introductory paragraph with basic usage example.
 
 -- TODO: Check laws for all instances in this file.
 -- TODO: Figure out which laws there are in SubstreamParser.

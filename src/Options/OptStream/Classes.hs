@@ -94,6 +94,8 @@ infixl 1 <&?>
 -- satisfy the law:
 --
 -- prop> failA err = fmapOrFail Left (pure err)
+--
+-- This is also the default implementation of 'failA'.
 class (Applicative f, FunctorFail f) => ApplicativeFail f where
   -- | Unconditional failure.
   failA :: String -> f a
