@@ -32,7 +32,7 @@ optionsP = Options
 
 main = do
   opts <- 'parseArgsWithHelp'
-    $ 'header' "demo [options] ARG"
+    $ 'header' "Usage: demo [options] ARG"
     $ 'footer' "Example: demo -b --int=42 foo"
     $ optionsP
 
@@ -55,7 +55,7 @@ Note that in the code above:
   * We run the parser using 'parseArgsWithHelp', which takes care of handling
   errors and printing @--help@.
 
-==== __Program outputs:__
+==== __Demo outputs:__
 
 >>> ./demo -s foo -i 42 -b bar
 String parameter   : "foo"
@@ -70,7 +70,7 @@ Boolean flag       : False
 Positional argument: "foo"
 
 >>> ./demo --help
-demo [options] ARG
+Usage: demo [options] ARG
 <BLANKLINE>
   -s, --string=STR  String parameter.
   -i, --int=INT     Integer parameter.
@@ -590,7 +590,7 @@ addParamHelp :: ([OptionForm] -> String -> Parser a)
 addParamHelp func opts metavar desc =
   paramHelp opts metavar desc $ func opts metavar
 
--- | A 'param' is an option that has one string argument, e.g.
+-- | A /parameter/ is an option that has one string argument, e.g.
 -- @--input=FILENAME@ or @-n NAME@.
 --
 -- The first argument to 'param' should list all the forms of the parameter,
@@ -738,8 +738,8 @@ paramChar' opts metavar = lift0 $ R.paramChar' opts metavar
 addFreeArgHelp :: (String -> Parser a) -> (String -> String -> Parser a)
 addFreeArgHelp func' metavar desc = freeArgHelp metavar desc $ func' metavar
 
--- | Matches any free argument, i.e. any argument that doesn't start with @-@.
--- Returns this argument verbatim as a string.
+-- | Matches any /free argument/, i.e. any argument that doesn't start with
+-- @-@.  Returns this argument verbatim as a string.
 --
 -- Like all the other atomic parsers in this module, 'freeArg' is mandatory. It
 -- can be made optional with @'<|>' 'orElse'@.
@@ -873,7 +873,7 @@ anyArg' = lift0 . R.anyArg'
 
 -- *** Multi-parameters
 
--- | A multi-parameter is an option that takes an arbitrary number of
+-- | A /multi-parameter/ is an option that takes an arbitrary number of
 -- arguments, e.g. @--person NAME AGE@. 'multiParam' lets you parse such
 -- options by providing the option form (in this case @--person@), and a
 -- special 'Follower' object that reads zero or more arguments that follow (in
@@ -1031,7 +1031,7 @@ withVersion' = lift1 . R.withVersion'
 -- Note that in this example we use '<#>' to combine the 'beforeDashes' wrapper
 -- with 'many' arbitrary arguments, which makes it possible to pass arbitrary
 -- arguments on both sides of @--@. Whatever arguments are skipped by
--- @beforeDashes transformP@ will be consumed by @many (arg \"WORD\")@.
+-- @beforeDashes transformP@ will be consumed by @many (anyArg' \"WORD\")@.
 --
 -- >>> ./echo Hello, world!
 -- Hello, world!
@@ -1063,7 +1063,7 @@ withVersion' = lift1 . R.withVersion'
 -- we want to pass a number of parameters, as well as positional arguments
 -- pointing to the source files of the script. To the right of @--@ we want to
 -- pass arbitrary arguments to the script that we are interpreting. We can
--- achieve this by using 'beforeDashes' with '<*>'.
+-- achieve this by using 'beforeDashes' with sequential application '<*>'.
 --
 -- > -- dashes.hs
 -- >

@@ -22,7 +22,7 @@ optionsP = Options
 
 main = do
   opts <- parseArgsWithHelp
-    $ header "demo [options] ARG"
+    $ header "Usage: demo [options] ARG"
     $ footer "Example: demo -b --int=42 foo"
     $ optionsP
 
