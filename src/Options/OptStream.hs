@@ -134,7 +134,7 @@ module Options.OptStream
   , withVersion'
   , beforeDashes
     -- ** IO-style parsers
-    -- TODO: Add introductory paragraph.
+    -- $io-style-parsers
   , withHelpIO
   , withHelpIO'
   , withSubHelpIO
@@ -1443,6 +1443,70 @@ parseArgsWithHelp pa = do
             ++ "\nTry \"" ++ name ++ " --help\" for more information."
 
 
+-- $io-style-parsers
+-- Throughout this documentation we call objects of the type @'Parser' ('IO'
+-- a)@ /IO-style parsers/. The idea is that instead of parsing command line
+-- options into some kind of "options" data structure, and then using that
+-- structure to define the behavior of our program, we can parse the command
+-- line directly into the IO action that defines the behavior. Consider this
+-- (somewhat artificial) example:
+--
+-- @
+-- module Main where
+-- 
+-- import Control.Applicative
+-- import Control.Monad
+-- import "Options.OptStream"
+-- 
+-- copy :: String -> String -> IO ()
+-- copy src dst = do
+--   contents <- readFile src
+--   writeFile dst contents
+-- 
+-- main :: IO ()
+-- main = 'join' . 'parseArgsWithHelp'
+--   $ 'header' "Usage: copy -i FILE -o FILE"
+--   $ copy
+--   '<$>' 'param' ["-i", "--input"] "FILE" "Input file."
+--   '<#>' 'param' ["-o", "--output"] "FILE" "Output file."
+-- @
+--
+-- The program has two command line options: an input and an output file. It
+-- never stores them in any data structurre: rather, they are passed directly
+-- to the function @copy@ using '<$>', resulting in an IO-style parser:
+--
+-- > copy <$> param ... <#> param ... :: Parser (IO ())
+--
+-- Note how this parser is then executed:
+--
+-- > join . parseArgsWithHelp :: Parser (IO a) -> IO a
+--
+-- This composition @(join . parseArgsWithHelp)@ returns an IO action that does
+-- all of the following:
+--
+--   * Extracts command line arguments from the environment.
+--   * Parses them, handling errors and @--help@.
+--   * Executes the @IO a@ action that resulted from the parse (this part is
+--   accomplished by 'join').
+--
+-- You don't have to use IO-style parsers if you don't want to, but if you do
+-- then you may find the helper functions below useful.
+--
+-- ==== __Demo outputs:__
+--
+-- >>> echo baz > foo.txt
+-- >>> ./copy -i foo.txt -o bar.txt
+-- >>> cat bar.txt
+-- baz
+--
+-- >>> ./copy --help
+-- Usage: copy -i FILE -o FILE
+-- <BLANKLINE>
+--   -i, --input=FILE   Input file.
+--   -o, --output=FILE  Output file.
+--       --help         Show this help message and exit.
+
+
 helpToIO :: Either Help a -> IO a
 helpToIO (Right a) = return a
 helpToIO (Left h) = do
@@ -1466,7 +1530,7 @@ withHelpIO = fmap (join . helpToIO) . withHelp
 
 -- | Like 'withHelpIO' but doesn't generate help about the added @--help@ flag
 -- itself. You can use this e.g. if you don't like the standard "Show this help
--- message and exit." text.
+-- message and exit" text.
 --
 -- ==== __Example (custom help):__
 --
@@ -1624,7 +1688,6 @@ withVersionIO' :: String
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' = lift1 . R.withVersionIO'
 
--- TODO: Add paragraph about IO-style parsers.
 -- TODO: Add paragraph about Raw.
 
 -- TODO: Check laws for all instances in this file.
