@@ -210,6 +210,9 @@ class Alternative p => SubstreamParser p where
   -- look at it too. Once both the LHS and RHS parsers have finished and
   -- produced results of type @(a -> b)@ and @a@ respectively, the compound
   -- parser also finishes and produces a combined result of type @b@.
+  --
+  -- Together with the sequential application '<*>' this operation makes
+  -- substream parsers "twice applicative".
   (<#>) :: p (a -> b) -> p a -> p b
 
   -- | Left-interruptive application. This starts out in the same way as '<#>':

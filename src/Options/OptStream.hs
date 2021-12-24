@@ -142,6 +142,15 @@ module Options.OptStream
   , withVersionIO
   , withVersionIO'
 
+    -- * Low-level parsers
+  , block
+  , short
+  , match
+  , matchAndFollow
+  , matchShort
+  , quiet
+  , eject
+
   -- * Manipulating help
   , header
   , footer
@@ -161,16 +170,8 @@ module Options.OptStream
   , setFollowerHelp
   , modifyFollowerHelp
 
-    -- * Low-level parsers
-  , block
-  , short
-  , match
-  , matchAndFollow
-  , matchShort
-  , quiet
-  , eject
-
     -- * Raw parsers
+    -- $raw
   , toRaw
   , fromRaw
   , toRawFollower
@@ -201,6 +202,25 @@ import Options.OptStream.Raw
   , formatParserError
   )
 import qualified Options.OptStream.Raw as R
+
+-- $raw
+-- Command line parsers are twice applicative thanks to two application
+-- operators: '<*>' and '<#>'. In reality they are also monadic, i.e. they have
+-- monadic bind '>>='. However, 'Parser' hides this monadic structure.  The
+-- reason for that is that 'Parser' produces 'Help', and there's no good way to
+-- generate help for @a >>= f@, because it is unknown what @f@ will return at
+-- runtime.
+--
+-- Therefore, 'Parser' is 'Applicative' but not a 'Monad'. However, the monadic
+-- structure can still be accessed using 'RawParser'. 'RawParser' doesn't
+-- generate help but does offer monadic bind. If you need it, you can build a
+-- 'RawParser' and then add 'Help' manually using e.g.  'setHelp', or not add
+-- any help at all.
+--
+-- We provide functions to convert between 'Parser' and 'RawParser', and
+-- likewise for 'Follower' and 'RawFollower'. When converting from "rich" to
+-- "raw", help information is lost. When converting back, empty or default help
+-- is generated.
 
 
 -- * Follower applicative
@@ -1688,7 +1708,6 @@ withVersionIO' :: String
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' = lift1 . R.withVersionIO'
 
--- TODO: Add paragraph about Raw.
 
 -- TODO: Check laws for all instances in this file.
 -- TODO: Figure out which laws there are in SubstreamParser.

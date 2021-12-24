@@ -89,7 +89,8 @@ data Context
 -- | An error returned by 'Options.OptStream.runParser'. There are three kinds of errors:
 --
 --   * An unexpected command line argument. This means that the top-level
---   parser skipped (didn't consume) an argument.
+--   parser skipped (didn't consume) an input token (a command-line argument or
+--   a 'Options.OptStream.short' flag inside an argument).
 --
 --   * A missing argument. This means that either the top-level parser refused
 --   to consume EOF, or that EOF was reached when a
