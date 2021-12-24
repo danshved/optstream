@@ -1394,7 +1394,7 @@ withSubHelp = clearHelp . withHelp
 
 -- | Like 'withSubHelp' but doesn't generate help about the @--help@ flag itself.
 withSubHelp' :: Parser a -> Parser (Either Help a)
-withSubHelp' = clearHelp . withHelp
+withSubHelp' = clearHelp . withHelp'
 
 -- ** IO helpers
 
@@ -1509,8 +1509,13 @@ parseArgsWithHelp pa = do
 --   * Executes the @IO a@ action that resulted from the parse (this part is
 --   accomplished by 'join').
 --
--- You don't have to use IO-style parsers if you don't want to, but if you do
--- then you may find the helper functions below useful.
+-- Of course IO-style parsers don't preclude the use of an intermediate data
+-- structure. The function @copy@ above could just as well receive its inputs
+-- in a record. However, if you want to avoid the intermediate record, you can.
+--
+-- In addition, you may find that IO-style parsers make it easier to handle
+-- some common tasks, such as handling the @--version@ flag (see
+-- 'withVersionIO') or executing subcommands (see 'withSubHelpIO').
 --
 -- ==== __Demo outputs:__
 --
@@ -1650,7 +1655,9 @@ withSubHelpIO :: Parser (IO a)
 withSubHelpIO = fmap (join . helpToIO) . withSubHelp
 
 -- | Like 'withSubHelpIO' but doesn't generate help about the added @--help@
--- flag itself.
+-- flag itself. Equivalent to:
+--
+-- > clearHelp . withHelpIO'
 withSubHelpIO' :: Parser (IO a)
                   -- ^ An existing IO-style 'Parser'.
                -> Parser (IO a)
