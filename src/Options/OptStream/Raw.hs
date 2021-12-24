@@ -335,6 +335,14 @@ endAlternative (Right da) _ = Right da
 endAlternative _ (Right da) = Right da
 endAlternative (Left xs) (Left xs') = Left $ xs <> xs'
 
+endParallel :: EndHandler (a -> b) -> EndHandler a -> EndHandler b
+endParallel (Right (Left e)) _ = Right (Left e)
+endParallel (Right (Right f)) eda = (fmap . fmap) f eda
+endParallel _ (Right (Left e)) = Right (Left e)
+endParallel edf (Right (Right a)) = (fmap . fmap) ($ a) edf
+endParallel (Left xs) (Left xs') = Left $ xs <> xs'
+
+-- TODO: remove if and when this becomes unused.
 liftEnd2 :: (DoneParser a -> DoneParser b -> DoneParser c)
          -> EndHandler a -> EndHandler b -> EndHandler c
 liftEnd2 op (Right da) (Right db) = Right $ op da db
@@ -385,16 +393,15 @@ instance Alternative RawParser where
       shortH'' s = shortH s <|> shortH' s
 
 instance SubstreamParser RawParser where
-  -- TODO: reread
   Done (Right f) <#> pa = fmap f pa
   Done (Left e) <#> _ = Done $ Left e
   pf <#> Done (Right a) = fmap ($ a) pf
   _ <#> Done (Left e) = Done $ Left e
   pf@(Scan endH argH shortH) <#> pa@(Scan endH' argH' shortH') =
     Scan endH'' argH'' shortH'' where
-      endH'' = liftEnd2 (<*>) endH endH'
+      endH'' = endH `endParallel` endH'
       argH'' s = case argH s of
-        Just rpf -> Just $ fmap (<#> pa) rpf
+        Just fpf -> Just $ fmap (<#> pa) fpf
         Nothing -> (fmap . fmap) (pf <#>) $ argH' s
       shortH'' c = case shortH c of
         Just pf' -> Just $ pf' <#> pa
@@ -407,7 +414,7 @@ instance SubstreamParser RawParser where
   Scan (Left xs) _ _ <-#> Done _ = Done $ doneMissingArg xs
   Scan endH argH shortH <-#> pa@(Scan endH' argH' shortH') =
     Scan endH'' argH'' shortH'' where
-      endH'' = liftEnd2 (<*>) endH endH'
+      endH'' = liftEnd2 (<*>) endH endH'  -- TODO: rethink.
       argH'' s = case argH s of
         Just rpf -> Just $ fmap (<-#> pa) rpf
         Nothing -> case argH' s of
@@ -426,14 +433,14 @@ instance SubstreamParser RawParser where
           Nothing -> Nothing
 
   -- TODO: reread
-  Done df <#-> Done da = Done $ da <**> df  -- TODO: think over.
+  Done df <#-> Done da = Done $ da <**> df  -- TODO: rethink.
   Done df <#-> Scan (Right da) _ _ = Done $ da <**> df
   Done _ <#-> Scan (Left xs) _ _ = Done $ doneMissingArg xs
   pf <#-> Done (Right a) = fmap ($ a) pf
   pf <#-> Done (Left e) = Done $ Left e
   pf@(Scan endH argH shortH) <#-> Scan endH' argH' shortH' =
     Scan endH'' argH'' shortH'' where
-      endH'' = liftEnd2 (<**>) endH' endH
+      endH'' = liftEnd2 (<**>) endH' endH  -- TODO: rethink.
       argH'' s = case argH s of
         Just rpf -> case endH' of
           Right (Right a) -> Just $ (fmap . fmap) ($ a) rpf
