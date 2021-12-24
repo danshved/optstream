@@ -230,7 +230,8 @@ type DoneParser a = Either DoneError a
 type EndHandler a = Either (List String) (DoneParser a)
 
 -- | A command line argument handler. Represents what the parser will do if the
--- next token it receives is a normal command line argument. The possibilities are:
+-- next token it receives is a normal command line argument. The possibilities
+-- are:
 --
 --   * Skip the argument (return 'Nothing'). In this case the parser's state
 --   doesn't change.
@@ -245,7 +246,7 @@ type ArgHandler a = String -> Maybe (RawFollower (RawParser a))
 -- it receives is a short flag. A parser /may/ receive a short flag token if
 -- the command line contains an argument of the form @-XYZ@, where @XYZ@ is a
 -- sequence of at least two characters that are different from @\'-\'@, and no
--- parser has consumed the argument '@-XYZ' as a whole.
+-- parser has consumed the argument @-XYZ@ as a whole.
 --
 -- The possibilities are:
 --
@@ -330,8 +331,8 @@ runParser = doRun CtxStart where
 -- ** Instances
 
 endAlternative :: EndHandler a -> EndHandler a -> EndHandler a
-endAlternative (Right a) _ = Right a
-endAlternative _ (Right a) = Right a
+endAlternative (Right da) _ = Right da
+endAlternative _ (Right da) = Right da
 endAlternative (Left xs) (Left xs') = Left $ xs <> xs'
 
 liftEnd2 :: (DoneParser a -> DoneParser b -> DoneParser c)
@@ -383,10 +384,8 @@ instance Alternative RawParser where
       argH'' s = argH s <|> argH' s
       shortH'' s = shortH s <|> shortH' s
 
--- TODO: check logic in all combinators below
 instance SubstreamParser RawParser where
-  eof a = Scan (Right $ Right a) (const Nothing) (const Nothing)
-
+  -- TODO: reread
   Done (Right f) <#> pa = fmap f pa
   Done (Left e) <#> _ = Done $ Left e
   pf <#> Done (Right a) = fmap ($ a) pf
@@ -401,6 +400,7 @@ instance SubstreamParser RawParser where
         Just pf' -> Just $ pf' <#> pa
         Nothing -> fmap (pf <#>) $ shortH' c
 
+  -- TODO: reread
   Done (Right f) <-#> pa = fmap f pa
   Done (Left e) <-#> _ = Done $ Left e
   Scan (Right df) _ _ <-#> Done da = Done $ df <*> da
@@ -425,6 +425,7 @@ instance SubstreamParser RawParser where
             Left xs -> Just . Done $ doneMissingArg xs
           Nothing -> Nothing
 
+  -- TODO: reread
   Done df <#-> Done da = Done $ da <**> df  -- TODO: think over.
   Done df <#-> Scan (Right da) _ _ = Done $ da <**> df
   Done _ <#-> Scan (Left xs) _ _ = Done $ doneMissingArg xs
@@ -446,6 +447,7 @@ instance SubstreamParser RawParser where
           Left xs -> Just . Done $ doneMissingArg xs
         Nothing -> fmap (pf <#->) $ shortH' c
 
+  -- TODO: reread
   Done da <-|> _ = Done da
   Scan _ _ _ <-|> Done da = Done da
   Scan endH argH shortH <-|> r@(Scan endH' argH' shortH') =
@@ -458,6 +460,7 @@ instance SubstreamParser RawParser where
         Just pa -> Just $ pa <-|> r
         Nothing -> shortH' c
 
+  -- TODO: reread
   Done da <|-> _ = Done da
   Scan _ _ _ <|-> Done da = Done da
   l@(Scan endH argH shortH) <|-> Scan endH' argH' shortH' =
@@ -469,6 +472,9 @@ instance SubstreamParser RawParser where
       shortH'' c = case shortH c of
         Just pa -> Just pa
         Nothing -> fmap (l <|->) $ shortH' c
+
+  eof = Scan (Right $ Right ()) (const Nothing) (const Nothing)
+
 
 
 -- ** Primitive parsers
@@ -731,7 +737,7 @@ eject :: RawParser a
       -> RawParser b
          -- ^ A parser that may trigger an ejection.
       -> RawParser (Either b a)
-eject a b = (Right <$> a <* eof ()) <-|> quiet (Left <$> b <* dropAll)
+eject a b = (Right <$> a <* eof) <-|> quiet (Left <$> b <* dropAll)
 
 -- | See 'Options.OptStream.withVersion''.
 withVersion' :: String

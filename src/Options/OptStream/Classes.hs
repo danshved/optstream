@@ -122,8 +122,8 @@ infixl 4 <##->
 infixl 3 <-|>
 infixl 3 <|->
 
--- | A type @p@ is a 'SubstreamParser' if it offers functions 'eof', '<#>',
--- '<-#>', '<#->', '<-|>', '<|->', standard 'Applicative' functions 'pure' and
+-- | A type @p@ is a 'SubstreamParser' if it offers functions '<#>', '<-#>',
+-- '<#->', '<-|>', '<|->', 'eof', standard 'Applicative' functions 'pure' and
 -- '<*>', and 'Alternative' functions 'empty' and '<|>'.
 --
 -- A substream parser handles a stream of /tokens/ of some kind. In case of
@@ -145,7 +145,8 @@ infixl 3 <|->
 --      - Finish the parse (and return a value of type @a@, or maybe an
 --      error).
 --
---      - Continue the parse, i.e. keep looking at more tokens.
+--      - Continue the parse, i.e. keep looking at more tokens. Not an option
+--      when handling EOF.
 --
 --
 -- ==== Applicative
@@ -176,34 +177,10 @@ infixl 3 <|->
 --
 -- [@many@, @some@, @optional@]:  These functions from "Control.Applicative"
 -- use 'pure' as a fallback alternative. This doesn't work for substream
--- parsers (see 'eof'), so this module provides its own replacements with the
--- same names: 'Options.OptStream.Classes.many',
+-- parsers (see 'orElse'), so this module provides its own replacements with
+-- the same names: 'Options.OptStream.Classes.many',
 -- 'Options.OptStream.Classes.some', 'Options.OptStream.Classes.optional'.
 class Alternative p => SubstreamParser p where
-  -- | Skips all input tokens except EOF, then produces the given value upon
-  -- consuming EOF.
-  --
-  -- Note that this has the same type signature as 'pure'. Both 'eof' and
-  -- 'pure' produce the same parse result. However, 'pure' finishes
-  -- immediately, whereas 'eof' waits until the end of the stream.
-  --
-  -- Most of the time this makes 'eof' the correct choice to use in
-  -- 'Alternative' expressions in order to provide default values:
-  --
-  -- @
-  -- p '<|>' 'eof' a
-  -- @
-  --
-  -- This will try running the parser @p@, and if @p@ never consumes any input
-  -- at all (including the EOF token) and never finishes, produce @a@ as the
-  -- default result.  Because of this pattern 'eof' has a synonym called
-  -- 'orElse'.
-  --
-  -- If we were to use 'pure' instead of 'eof' above, it wouldn't work. The
-  -- 'pure' alternative would immediately "win" and kill @p@ (unless @p@ also
-  -- finishes immediately before looking at any tokens).
-  eof :: a -> p a
-
   -- | Parallel application. This runs two parsers in parallel. For each input
   -- token, the left hand side (LHS) parser looks at it first. If the LHS
   -- parser skips the token, the right hand side (RHS) parser gets a chance to
@@ -230,6 +207,14 @@ class Alternative p => SubstreamParser p where
   -- The LHS in this case is the main options parser for an application, and
   -- the RHS matches @"--"@. If the user passes @"--"@ on the command line, it
   -- looks like EOF to the main options parser.
+  --
+  -- Note: This operator is "natural". The actual inputs consumed by the LHS
+  -- parser always precede the ones consumed by the RHS in the stream. In this
+  -- sense '<-#>' is similar to '<*>', which has the same property. The
+  -- difference between them is that in '<*>' the RHS parser is "patient": it
+  -- doesn't start looking at inputs until the LHS parser has finished.
+  -- Contrast this with '<-#>', where the RHS is "impatient": the RHS starts
+  -- looking at inputs a.s.a.p. and has the ability to terminate the LHS.
   (<-#>) :: p (a -> b) -> p a -> p b
 
   -- | Right-interruptive application. Similar to '<-#>' but with the roles
@@ -239,6 +224,10 @@ class Alternative p => SubstreamParser p where
   -- Note however that both in '<-#>' and '<#->' the LHS parser looks at each
   -- token first, and the RHS parser gets to look at it only if the LHS one has
   -- skipped it.
+  --
+  -- Note: this operator is "unnatural". The actual inputs consumed by the LHS
+  -- parser will always come /after/ the ones consumed by the RHS in the
+  -- stream.
   (<#->) :: p (a -> b) -> p a -> p b
 
   -- | Left-interruptive alternative. This starts off running two parsers in
@@ -269,6 +258,10 @@ class Alternative p => SubstreamParser p where
   -- token first, and the RHS parser gets to look at it only if the LHS one has
   -- skipped it.
   (<|->) :: p a -> p a -> p a
+
+  -- | Skips all input tokens except EOF, then returns '()'. See also:
+  -- 'orElse'.
+  eof :: p ()
 
   -- | Zero or more. This will run the given parser repeatedly until EOF is
   -- reached and gather results in a list.
@@ -329,17 +322,23 @@ class Alternative p => SubstreamParser p where
       =   ((:) <$> y <*> perm (reverse ys' ++ ys))
       <|> enumerate (y:ys') ys
 
--- | Synonym for 'eof'. Intended usage is the @'<|>' 'orElse'@ idiom to provide
--- a fallback alternative for a chain of parsers connected with '<|>'.
+-- | Waits for EOF, then produces the given parse result. Intended usage is the
+-- @'<|>' 'orElse'@ idiom to provide a fallback alternative for a chain of
+-- parsers connected with '<|>'.
 --
 -- > p <|> orElse x
 --
--- will run parser @p@, and if @p@ consumes any token (normal or EOF), then @p@
--- will finish the parse. If @p@ doesn't consume any tokens at all and never
--- finishes then the alternative parser will produce the value @x@ upon
+-- will run the parser @p@, and if @p@ consumes any token (normal or EOF), then
+-- @p@ will finish the parse. If @p@ doesn't consume any tokens at all and
+-- never finishes then the alternative parser will produce the value @x@ upon
 -- receiving EOF.
+--
+-- Note that 'orElse' has the same type as 'pure': @a -> p a@. They produce the
+-- same parse result. However, unlike 'orElse' 'pure' finishes the parse
+-- immediately, without waiting for EOF. This makes 'pure' unsuitable as a
+-- fallback alternative most of the time.
 orElse :: SubstreamParser p => a -> p a
-orElse = eof
+orElse a = eof *> pure a
 
 -- | Convenience wrapper around 'many'. Will start with a given value of type
 -- @a@, and then will parse zero or more "updates" of type @a -> a@. Updates

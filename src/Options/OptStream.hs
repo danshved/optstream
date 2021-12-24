@@ -376,7 +376,7 @@ instance Alternative Parser where
   (<|>) = lift2 (<|>)
 
 instance SubstreamParser Parser where
-  eof = lift0 . eof
+  eof = lift0 eof
   (<#>) = lift2 (<#>)
   (<-#>) = lift2 (<-#>)
   (<#->) = lift2 (<#->)
