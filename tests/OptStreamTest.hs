@@ -130,6 +130,8 @@ args :: Parser [String]
 args = many (anyArg' "ARG")
 
 
+-- * Tests for 'flag' and 'flag''.
+
 -- | Represents a choice between 'flag' and 'flag''.
 data FlagMaker
   = Flag'
@@ -208,6 +210,9 @@ prop_flagSep_NotMatchesBundle maker cs =
     p = sequenceA [mkFlagSep maker [['-', c]] | NotDash c <- cs]
 
 
+-- * Tests for 'param' and 'param''
+
+-- | Represents a choice between 'param' and 'param''.
 data ParamMaker
   = Param' String
   | Param String String
@@ -228,10 +233,8 @@ instance Arbitrary ParamMaker where
     [Param metavar desc' | desc' <- shrink desc] ++
     [Param metavar' desc | metavar' <- shrink metavar]
 
-prop_param_Matches maker (Legals as) (Legal b) (Legals cs) d =
-  runParser (mkParam maker forms) [b, d] == Right d
-  where
-    forms = as ++ [b] ++ cs
+prop_param_Matches maker fs x =
+  runParser (mkParam maker $ allForms fs) [chosenForm fs, x] == Right x
 
 prop_param_MatchesShort maker (Legals as) (NotDash b) (Legals cs) (NonEmpty d) =
   runParser (mkParam maker forms) ['-':b:d] == Right d
@@ -243,10 +246,11 @@ prop_param_MatchesLong maker (Legals as) (NonEmpty b) (Legals cs) d =
   where
     forms = as ++ ["--" ++ b] ++ cs
 
-prop_param_Finishes maker (Legals as) (Legal b) (Legals cs) d es =
-  runParser (mkParam maker forms *> args) (b:d:es) == Right es
+prop_param_Finishes maker fs x ys =
+  runParser (mkParam maker forms *> args) (f:x:ys) == Right ys
   where
-    forms = as ++ [b] ++ cs
+    forms = allForms fs
+    f = chosenForm fs
 
 prop_param_FinishesShort
   maker (Legals as) (NotDash b) (Legals cs) (NonEmpty d) es =
@@ -260,27 +264,23 @@ prop_param_FinishesLong maker (Legals as) (NonEmpty b) (Legals cs) d es =
     forms = as ++ ["--" ++ b] ++ cs
     assign = "--" ++ b ++ "=" ++ d
 
-prop_param_Skips maker (Legals as) (Legal b) (Legals cs) d e =
+prop_param_Skips maker fs d e =
   not (any (`isPrefixOf` e) forms) ==>
-  runParser (mkParam maker forms #> args) [e, b, d] == Right [e]
+  runParser (mkParam maker forms #> args) [e, chosenForm fs, d] == Right [e]
   where
-    forms = as ++ [b] ++ cs
+    forms = allForms fs
 
-prop_param_Empty maker (Legal a) (Legals bs) =
-  isLeft $ runParser (mkParam maker forms) []
-  where
-    forms = a:bs
+prop_param_Empty maker fs =
+  isLeft $ runParser (mkParam maker $ allForms fs) []
 
-prop_param_MissingArg maker (Legals as) (Legal b) (Legals cs) =
-  isLeft $ runParser (mkParam maker forms) [b]
-  where
-    forms = as ++ [b] ++ cs
+prop_param_MissingArg maker fs =
+  isLeft $ runParser (mkParam maker $ allForms fs) [chosenForm fs]
 
-prop_param_NotMatches maker (Legal a) (Legals bs) c d =
+prop_param_NotMatches maker fs c d =
   not (any (`isPrefixOf` c) forms) ==>
   isLeft $ runParser (mkParam maker forms *> args) [c, d]
   where
-    forms = a:bs
+    forms = allForms fs
 
 
 data FreeArgMaker
