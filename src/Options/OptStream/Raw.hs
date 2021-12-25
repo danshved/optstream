@@ -446,7 +446,6 @@ instance SubstreamParser RawParser where
           Left xs -> Just . Done $ doneMissingArg xs
         Nothing -> fmap (pf <#->) $ shortH' c
 
-  -- TODO: reread
   Done da <-|> _ = Done da
   Scan _ _ _ <-|> Done da = Done da
   Scan endH argH shortH <-|> r@(Scan endH' argH' shortH') =
@@ -459,7 +458,6 @@ instance SubstreamParser RawParser where
         Just pa -> Just $ pa <-|> r
         Nothing -> shortH' c
 
-  -- TODO: reread
   Done da <|-> _ = Done da
   Scan _ _ _ <|-> Done da = Done da
   l@(Scan endH argH shortH) <|-> Scan endH' argH' shortH' =

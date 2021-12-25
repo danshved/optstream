@@ -13,43 +13,53 @@ main = defaultMain tests
 
 tests :: [Test]
 tests =
-  [ testProperty "flag'_Matches"       prop_flag'_Matches
-  , testProperty "flag'_Finishes"      prop_flag'_Finishes
-  , testProperty "flag'_Empty"         prop_flag'_Empty
-  , testProperty "flag'_NotMatches"    prop_flag'_NotMatches
-  , testProperty "flag'_Skips"         prop_flag'_Skips
-  , testProperty "flag'_MatchesBundle" prop_flag'_MatchesBundle
+  [ testGroup "flag'"
+    [ testProperty "Matches"       prop_flag'_Matches
+    , testProperty "Finishes"      prop_flag'_Finishes
+    , testProperty "Empty"         prop_flag'_Empty
+    , testProperty "NotMatches"    prop_flag'_NotMatches
+    , testProperty "Skips"         prop_flag'_Skips
+    , testProperty "MatchesBundle" prop_flag'_MatchesBundle
+    ]
 
-  , testProperty "flagSep'_Matches"          prop_flagSep'_Matches
-  , testProperty "flagSep'_Finishes"         prop_flagSep'_Finishes
-  , testProperty "flagSep'_Empty"            prop_flagSep'_Empty
-  , testProperty "flagSep'_NotMatches"       prop_flagSep'_NotMatches
-  , testProperty "flagSep'_Skips"            prop_flagSep'_Skips
-  , testProperty "flagSep'_NotMatchesBundle" prop_flagSep'_NotMatchesBundle
+  , testGroup "flagSep'"
+    [ testProperty "Matches"          prop_flagSep'_Matches
+    , testProperty "Finishes"         prop_flagSep'_Finishes
+    , testProperty "Empty"            prop_flagSep'_Empty
+    , testProperty "NotMatches"       prop_flagSep'_NotMatches
+    , testProperty "Skips"            prop_flagSep'_Skips
+    , testProperty "NotMatchesBundle" prop_flagSep'_NotMatchesBundle
+    ]
 
-  , testProperty "param'_Matches"       prop_param'_Matches
-  , testProperty "param'_MatchesShort"  prop_param'_MatchesShort
-  , testProperty "param'_MatchesLong"   prop_param'_MatchesLong
-  , testProperty "param'_Finishes"      prop_param'_Finishes
-  , testProperty "param'_FinishesShort" prop_param'_FinishesShort
-  , testProperty "param'_FinishesLong"  prop_param'_FinishesLong
-  , testProperty "param'_Empty"         prop_param'_Empty
-  , testProperty "param'_MissingArg"    prop_param'_MissingArg
-  , testProperty "param'_NotMatches"    prop_param'_NotMatches
-  , testProperty "param'_Skips"         prop_param'_Skips
+  , testGroup "param'"
+    [ testProperty "Matches"       prop_param'_Matches
+    , testProperty "MatchesShort"  prop_param'_MatchesShort
+    , testProperty "MatchesLong"   prop_param'_MatchesLong
+    , testProperty "Finishes"      prop_param'_Finishes
+    , testProperty "FinishesShort" prop_param'_FinishesShort
+    , testProperty "FinishesLong"  prop_param'_FinishesLong
+    , testProperty "Empty"         prop_param'_Empty
+    , testProperty "MissingArg"    prop_param'_MissingArg
+    , testProperty "NotMatches"    prop_param'_NotMatches
+    , testProperty "Skips"         prop_param'_Skips
+    ]
 
-  , testProperty "freeArg'_Matches"    prop_freeArg'_Matches
-  , testProperty "freeArg'_Finishes"   prop_freeArg'_Finishes
-  , testProperty "freeArg'_Empty"      prop_freeArg'_Empty
-  , testProperty "freeArg'_NotMatches" prop_freeArg'_NotMatches
-  , testProperty "freeArg'_Skips"      prop_freeArg'_Skips
+  , testGroup "freeArg'"
+    [ testProperty "Matches"    prop_freeArg'_Matches
+    , testProperty "Finishes"   prop_freeArg'_Finishes
+    , testProperty "Empty"      prop_freeArg'_Empty
+    , testProperty "NotMatches" prop_freeArg'_NotMatches
+    , testProperty "Skips"      prop_freeArg'_Skips
+    ]
 
-  , testProperty "multiParam'_Matches"    prop_multiParam'_Matches
-  , testProperty "multiParam'_Finishes"   prop_multiParam'_Finishes
-  , testProperty "multiParam'_Empty"      prop_multiParam'_Empty
-  , testProperty "multiParam'_NotEnough"  prop_multiParam'_NotEnough
-  , testProperty "multiParam'_NotMatches" prop_multiParam'_NotMatches
-  , testProperty "multiParam'_Skips"      prop_multiParam'_Skips
+  , testGroup "multiParam'"
+    [ testProperty "Matches"    prop_multiParam'_Matches
+    , testProperty "Finishes"   prop_multiParam'_Finishes
+    , testProperty "Empty"      prop_multiParam'_Empty
+    , testProperty "NotEnough"  prop_multiParam'_NotEnough
+    , testProperty "NotMatches" prop_multiParam'_NotMatches
+    , testProperty "Skips"      prop_multiParam'_Skips
+    ]
   ]
 
 -- | Represents an arbitrary legal option form.
