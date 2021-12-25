@@ -64,7 +64,7 @@ tests =
 
 -- | Represents an arbitrary legal option form.
 newtype Legal = Legal { unLegal :: OptionForm }
-  deriving (Eq, Ord, Show)
+  deriving Show
 
 instance Arbitrary Legal where
   arbitrary = oneof
@@ -81,15 +81,33 @@ instance Arbitrary Legal where
 
 -- | Represents an arbitrary list of legal option forms (possibly empty).
 newtype Legals = Legals { unLegals :: [OptionForm] }
-  deriving (Eq, Ord, Show)
+  deriving Show
 
 instance Arbitrary Legals where
   arbitrary = Legals . map unLegal <$> arbitrary
   shrink (Legals ss) = map Legals $ shrinkList (map unLegal . shrink . Legal) ss
 
+-- | Represents a set of legal option forms with one of them selected.
+data Forms = Forms Legals Legal Legals
+  deriving Show
+
+allForms :: Forms -> [OptionForm]
+allForms (Forms (Legals as) (Legal b) (Legals cs)) = as ++ [b] ++ cs
+
+chosenForm :: Forms -> OptionForm
+chosenForm (Forms _ (Legal x) _) = x
+
+instance Arbitrary Forms where
+  arbitrary = Forms <$> arbitrary <*> arbitrary <*> arbitrary
+
+  shrink (Forms x y z) =
+    [Forms x' y z | x' <- shrink x] ++
+    [Forms x y' z | y' <- shrink y] ++
+    [Forms x y z' | z' <- shrink z]
+
 -- | Represents an arbitrary character other than '-'.
 newtype NotDash = NotDash { unNotDash :: Char }
-  deriving (Eq, Ord, Show)
+  deriving Show
 
 instance Arbitrary NotDash where
   arbitrary = NotDash <$> arbitrary `suchThat` (/= '-')
@@ -97,7 +115,7 @@ instance Arbitrary NotDash where
 
 -- | Represents an arbitrary free argument.
 newtype Free = Free { unFree :: String }
-  deriving (Eq, Ord, Show)
+  deriving Show
 
 instance Arbitrary Free where
   arbitrary = Free <$> arbitrary `suchThat` isFree
@@ -107,11 +125,12 @@ isFree :: String -> Bool
 isFree ('-':_) = False
 isFree _ = True
 
--- Helper parser that collects all the arguments it gets.
+-- Helper parser that collects all the arguments that it gets.
 args :: Parser [String]
 args = many (anyArg' "ARG")
 
 
+-- | Represents a choice between 'flag' and 'flag''.
 data FlagMaker
   = Flag'
   | Flag String
@@ -131,32 +150,27 @@ instance Arbitrary FlagMaker where
   shrink Flag' = []
   shrink (Flag s) = Flag':[Flag s' | s' <- shrink s]
 
-prop_flag_Matches maker (Legals as) (Legal b) (Legals cs) =
-  runParser (mkFlag maker forms) [b] == Right ()
-  where
-    forms = as ++ [b] ++ cs
 
-prop_flag_Finishes maker (Legals as) (Legal b) (Legals cs) ds =
-  runParser (mkFlag maker forms *> args) (b:ds) == Right ds
-  where
-    forms = as ++ [b] ++ cs
+prop_flag_Matches maker fs =
+  runParser (mkFlag maker $ allForms fs) [chosenForm fs] == Right ()
 
-prop_flag_Skips maker (Legals as) (Legal b) (Legals cs) d =
-  not (d `elem` forms) ==>
-  runParser (mkFlag maker forms #> args) [d, b] == Right [d]
-  where
-    forms = as ++ [b] ++ cs
+prop_flag_Finishes maker fs xs =
+  runParser (mkFlag maker (allForms fs) *> args) (chosenForm fs:xs) == Right xs
 
-prop_flag_Empty maker (Legal a) (Legals bs) =
-  isLeft $ runParser (mkFlag maker forms) []
+prop_flag_Skips maker fs x =
+  not (x `elem` forms) ==>
+  runParser (mkFlag maker forms #> args) [x, chosenForm fs] == Right [x]
   where
-    forms = a:bs
+    forms = allForms fs
 
-prop_flag_NotMatches maker (Legal a) (Legals bs) c =
-  not (c `elem` forms) ==>
-  isLeft $ runParser (mkFlag maker forms) [c]
+prop_flag_Empty maker fs =
+  isLeft $ runParser (mkFlag maker $ allForms fs) []
+
+prop_flag_NotMatches maker fs x =
+  not (x `elem` forms) ==>
+  isLeft $ runParser (mkFlag maker forms) [x]
   where
-    forms = a:bs
+    forms = allForms fs
 
 prop_flag_MatchesBundle maker (NonEmpty cs) =
   runParser p ['-':chars] == Right [() | c <- chars]
@@ -165,32 +179,27 @@ prop_flag_MatchesBundle maker (NonEmpty cs) =
     chars = [c | NotDash c <- cs]
 
 
-prop_flagSep_Matches maker (Legals as) (Legal b) (Legals cs) =
-  runParser (mkFlagSep maker forms) [b] == Right ()
-  where
-    forms = as ++ [b] ++ cs
+prop_flagSep_Matches maker fs =
+  runParser (mkFlagSep maker $ allForms fs) [chosenForm fs] == Right ()
 
-prop_flagSep_Finishes maker (Legals as) (Legal b) (Legals cs) ds =
-  runParser (mkFlagSep maker forms *> args) (b:ds) == Right ds
-  where
-    forms = as ++ [b] ++ cs
+prop_flagSep_Finishes maker fs xs =
+  runParser (mkFlagSep maker (allForms fs) *> args) (chosenForm fs:xs)
+    == Right xs
 
-prop_flagSep_Skips maker (Legals as) (Legal b) (Legals cs) d =
-  not (d `elem` forms) ==>
-  runParser (mkFlagSep maker forms #> args) [d, b] == Right [d]
+prop_flagSep_Skips maker fs x =
+  not (x `elem` forms) ==>
+  runParser (mkFlagSep maker forms #> args) [x, chosenForm fs] == Right [x]
   where
-    forms = as ++ [b] ++ cs
+    forms = allForms fs
 
-prop_flagSep_Empty maker (Legal a) (Legals bs) =
-  isLeft $ runParser (mkFlagSep maker forms) []
-  where
-    forms = a:bs
+prop_flagSep_Empty maker fs =
+  isLeft $ runParser (mkFlagSep maker $ allForms fs) []
 
-prop_flagSep_NotMatches maker (Legal a) (Legals bs) c =
-  not (c `elem` forms) ==>
-  isLeft $ runParser (mkFlagSep maker forms) [c]
+prop_flagSep_NotMatches maker fs x =
+  not (x `elem` forms) ==>
+  isLeft $ runParser (mkFlagSep maker forms) [x]
   where
-    forms = a:bs
+    forms = allForms fs
 
 prop_flagSep_NotMatchesBundle maker cs =
   length cs >= 2 ==>
