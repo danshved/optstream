@@ -45,11 +45,11 @@ tests =
     ]
 
   , testGroup "freeArg'"
-    [ testProperty "Matches"    prop_freeArg'_Matches
-    , testProperty "Finishes"   prop_freeArg'_Finishes
-    , testProperty "Empty"      prop_freeArg'_Empty
-    , testProperty "NotMatches" prop_freeArg'_NotMatches
-    , testProperty "Skips"      prop_freeArg'_Skips
+    [ testProperty "Matches"    prop_freeArg_Matches
+    , testProperty "Finishes"   prop_freeArg_Finishes
+    , testProperty "Empty"      prop_freeArg_Empty
+    , testProperty "NotMatches" prop_freeArg_NotMatches
+    , testProperty "Skips"      prop_freeArg_Skips
     ]
 
   , testGroup "multiParam'"
@@ -235,20 +235,40 @@ prop_param'_NotMatches (Legal a) (Legals bs) meta c d =
     forms = a:bs
 
 
-prop_freeArg'_Matches meta (Free a) =
-  runParser (freeArg' meta) [a] == Right a
+data FreeArgMaker
+  = FreeArg' String
+  | FreeArg String String
+  deriving (Eq, Ord, Show)
 
-prop_freeArg'_Finishes meta (Free a) bs =
-  runParser (freeArg' meta *> args) (a:bs) == Right bs
+toFreeArg :: FreeArgMaker -> Parser String
+toFreeArg (FreeArg' meta) = freeArg' meta
+toFreeArg (FreeArg meta desc) = freeArg meta desc
 
-prop_freeArg'_Skips meta (Free a) b =
-  runParser (freeArg' meta #> args) ['-':b, a] == Right ['-':b]
+instance Arbitrary FreeArgMaker where
+  arbitrary = oneof
+    [ FreeArg' <$> arbitrary
+    , FreeArg <$> arbitrary <*> arbitrary
+    ]
 
-prop_freeArg'_Empty meta =
-  isLeft $ runParser (freeArg' meta) []
+  shrink (FreeArg' meta) = [FreeArg' meta' | meta' <- shrink meta]
+  shrink (FreeArg meta desc) = [FreeArg' meta] ++
+    [FreeArg meta desc' | desc' <- shrink desc] ++
+    [FreeArg meta' desc | meta' <- shrink meta]
 
-prop_freeArg'_NotMatches meta a =
-  isLeft $ runParser (freeArg' meta) ['-':a]
+prop_freeArg_Matches maker (Free a) =
+  runParser (toFreeArg maker) [a] == Right a
+
+prop_freeArg_Finishes maker (Free a) bs =
+  runParser (toFreeArg maker *> args) (a:bs) == Right bs
+
+prop_freeArg_Skips maker (Free a) b =
+  runParser (toFreeArg maker #> args) ['-':b, a] == Right ['-':b]
+
+prop_freeArg_Empty maker =
+  isLeft $ runParser (toFreeArg maker) []
+
+prop_freeArg_NotMatches maker a =
+  isLeft $ runParser (toFreeArg maker) ['-':a]
 
 
 prop_multiParam'_Matches (Legals as) (Legal b) (Legals cs) dms =
