@@ -123,12 +123,14 @@ isFree _ = True
 args :: Parser [String]
 args = many (anyArg' "ARG")
 
--- | An example of a successful parse. Consists of a parser, a sample input,
--- and a value that the parser is supposed to produce from this input.
+-- | An example of a parse that should succeed.
 data Example a = Example
   { parser :: Parser a
+    -- ^ Parser under test.
   , inputs :: [String]
+    -- ^ Inputs that the parser should successfully consume.
   , value :: a
+    -- ^ Value that the parser should produce.
   }
 
 -- * Tests for 'flag' and 'flag''.
@@ -137,7 +139,7 @@ data Example a = Example
 data FlagMaker
   = Flag'
   | Flag String
-  deriving Show
+  deriving (Show, Generic)
 
 mkFlag :: FlagMaker -> [OptionForm] -> Parser ()
 mkFlag Flag' opts = flag' opts
@@ -151,7 +153,7 @@ instance Arbitrary FlagMaker where
   arbitrary = oneof [pure Flag', Flag <$> arbitrary]
 
   shrink Flag' = []
-  shrink (Flag s) = Flag':[Flag s' | s' <- shrink s]
+  shrink m@(Flag _)= Flag':genericShrink m
 
 
 prop_flag_Matches maker fs =
@@ -230,8 +232,8 @@ instance Arbitrary ParamMaker where
     , Param <$> arbitrary <*> arbitrary
     ]
 
-  shrink m@(Param' metavar) = genericShrink m
-  shrink m@(Param metavar desc) = [Param' metavar] ++ genericShrink m
+  shrink m@(Param' _) = genericShrink m
+  shrink m@(Param metavar _) = Param' metavar:genericShrink m
 
 
 -- | Represents an example where a specific 'param' or 'param'' parser should
@@ -308,7 +310,7 @@ prop_param_NotMatches maker fs c d =
 data FreeArgMaker
   = FreeArg' String
   | FreeArg String String
-  deriving Show
+  deriving (Show, Generic)
 
 mkFreeArg :: FreeArgMaker -> Parser String
 mkFreeArg (FreeArg' meta) = freeArg' meta
@@ -320,10 +322,8 @@ instance Arbitrary FreeArgMaker where
     , FreeArg <$> arbitrary <*> arbitrary
     ]
 
-  shrink (FreeArg' meta) = [FreeArg' meta' | meta' <- shrink meta]
-  shrink (FreeArg meta desc) = [FreeArg' meta] ++
-    [FreeArg meta desc' | desc' <- shrink desc] ++
-    [FreeArg meta' desc | meta' <- shrink meta]
+  shrink m@(FreeArg' _) = genericShrink m
+  shrink m@(FreeArg metavar _) = FreeArg' metavar:genericShrink m
 
 prop_freeArg_Matches maker (Free a) =
   runParser (mkFreeArg maker) [a] == Right a
@@ -344,7 +344,7 @@ prop_freeArg_NotMatches maker a =
 data MultiParamMaker
   = MultiParam'
   | MultiParam String
-  deriving Show
+  deriving (Show, Generic)
 
 mkMultiParam :: MultiParamMaker -> [OptionForm] -> Follower a -> Parser a
 mkMultiParam MultiParam' opts f = multiParam' opts f
@@ -354,8 +354,7 @@ instance Arbitrary MultiParamMaker where
   arbitrary = oneof [pure MultiParam', MultiParam <$> arbitrary]
 
   shrink MultiParam' = []
-  shrink (MultiParam desc) = MultiParam':
-    [MultiParam desc' | desc' <- shrink desc]
+  shrink m@(MultiParam _) = MultiParam':genericShrink m
 
 prop_multiParam_Matches maker (Legals as) (Legal b) (Legals cs) dms =
   runParser (mkMultiParam maker forms $ traverse next ms) (b:ds) == Right ds
