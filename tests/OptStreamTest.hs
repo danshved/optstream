@@ -9,13 +9,14 @@ import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 
 import Options.OptStream
+import Options.OptStream.Test.Helpers
 
 main :: IO ()
 main = defaultMain tests
 
 tests :: [Test]
 tests =
-  [ testGroup "flag'"
+  [ testGroup "flag"
     [ testProperty "Matches"       prop_flag_Matches
     , testProperty "Finishes"      prop_flag_Finishes
     , testProperty "Empty"         prop_flag_Empty
@@ -24,7 +25,7 @@ tests =
     , testProperty "MatchesBundle" prop_flag_MatchesBundle
     ]
 
-  , testGroup "flagSep'"
+  , testGroup "flagSep"
     [ testProperty "Matches"          prop_flagSep_Matches
     , testProperty "Finishes"         prop_flagSep_Finishes
     , testProperty "Empty"            prop_flagSep_Empty
@@ -33,7 +34,7 @@ tests =
     , testProperty "NotMatchesBundle" prop_flagSep_NotMatchesBundle
     ]
 
-  , testGroup "param'"
+  , testGroup "param"
     [ testProperty "Matches"       prop_param_Matches
     , testProperty "Finishes"      prop_param_Finishes
     , testProperty "Empty"         prop_param_Empty
@@ -42,7 +43,7 @@ tests =
     , testProperty "Skips"         prop_param_Skips
     ]
 
-  , testGroup "freeArg'"
+  , testGroup "freeArg"
     [ testProperty "Matches"    prop_freeArg_Matches
     , testProperty "Finishes"   prop_freeArg_Finishes
     , testProperty "Empty"      prop_freeArg_Empty
@@ -50,7 +51,7 @@ tests =
     , testProperty "Skips"      prop_freeArg_Skips
     ]
 
-  , testGroup "multiParam'"
+  , testGroup "multiParam"
     [ testProperty "Matches"    prop_multiParam_Matches
     , testProperty "Finishes"   prop_multiParam_Finishes
     , testProperty "Empty"      prop_multiParam_Empty
@@ -128,9 +129,13 @@ data Example a = Example
   { parser :: Parser a
     -- ^ Parser under test.
   , inputs :: [String]
-    -- ^ Inputs that the parser should successfully consume.
+    -- ^ Example sequence of input arguments that the parser should
+    -- successfully consume.
   , result :: a
-    -- ^ Value that the parser should produce.
+    -- ^ The value that the parser should produce.
+  , consumes :: ArgLanguage
+    -- ^ The set of all strings the parser is supposed to be willing to
+    -- consume. The parser should skip any string not belonging to this set.
   }
 
 -- * Tests for 'flag' and 'flag''.
@@ -250,21 +255,28 @@ buildParamExample (ParamExample maker fs x)
   { parser = mkParam maker $ allForms fs
   , inputs = [chosenForm fs, x]
   , result = x
+  , consumes = mconcat . map withPrefix $ allForms fs
   }
 buildParamExample
   (ParamShortExample maker (Legals as) (NotDash b) (Legals cs) (NonEmpty x))
   = Example
-  { parser = mkParam maker $ as ++ [['-', b]] ++ cs
+  { parser = mkParam maker forms
   , inputs = ['-':b:x]
   , result = x
+  , consumes = mconcat $ map withPrefix forms
   }
+  where
+    forms = as ++ [['-', b]] ++ cs
 buildParamExample
   (ParamLongExample maker (Legals as) (NonEmpty b) (Legals cs) x)
   = Example
-  { parser = mkParam maker $ as ++ ["--" ++ b] ++ cs
+  { parser = mkParam maker forms
   , inputs = ["--" ++ b ++ "=" ++ x]
   , result = x
+  , consumes = mconcat $ map withPrefix forms
   }
+  where
+    forms = as ++ ["--" ++ b] ++ cs
 
 instance Arbitrary ParamExampleBuilder where
   arbitrary = oneof
@@ -288,11 +300,11 @@ prop_param_Finishes builder y =
   where
     ex = buildParamExample builder
 
-prop_param_Skips maker fs x y =
-  not (any (`isPrefixOf` y) forms) ==>
-  runParser (mkParam maker forms #> args) [y, chosenForm fs, x] == Right [y]
+prop_param_Skips builder y =
+  not (y `member` consumes ex) ==>
+  runParser (parser ex #> args) (y:inputs ex) == Right [y]
   where
-    forms = allForms fs
+    ex = buildParamExample builder
 
 prop_param_Empty maker fs =
   isLeft $ runParser (mkParam maker $ allForms fs) []
@@ -358,14 +370,15 @@ instance Arbitrary MultiParamMaker where
 
 
 data MultiParamExampleBuilder
-  = MultiParamExampleBuilder MultiParamMaker Forms [(String, String)]
+  = MultiParamExample MultiParamMaker Forms [(String, String)]
   deriving (Show, Generic)
 
 buildMultiParamExample :: MultiParamExampleBuilder -> Example [String]
-buildMultiParamExample (MultiParamExampleBuilder maker fs pairs) = Example
+buildMultiParamExample (MultiParamExample maker fs pairs) = Example
   { parser = mkMultiParam maker (allForms fs) $ traverse next metavars
   , inputs = chosenForm fs:xs
   , result = xs
+  , consumes = mconcat . map singleton $ allForms fs
   }
   where
     metavars = map fst pairs  -- Metavariables.
@@ -373,7 +386,7 @@ buildMultiParamExample (MultiParamExampleBuilder maker fs pairs) = Example
 
 instance Arbitrary MultiParamExampleBuilder where
   arbitrary =
-    MultiParamExampleBuilder <$> arbitrary <*> arbitrary <*> arbitrary
+    MultiParamExample <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 
@@ -387,14 +400,11 @@ prop_multiParam_Finishes builder y =
   where
     ex = buildMultiParamExample builder
 
-prop_multiParam_Skips maker (Legals as) (Legal b) (Legals cs) dms e =
-  not (e `elem` forms) ==>
-  runParser (mkMultiParam maker forms f #> args) (e:b:ds) == Right [e]
+prop_multiParam_Skips builder y =
+  not (y `member` consumes ex) ==>
+  runParser (parser ex #> args) (y:inputs ex) == Right [y]
   where
-    forms = as ++ [b] ++ cs
-    f = traverse next ms
-    ms = map snd dms  -- Metavariables.
-    ds = map fst dms  -- Arguments that should match them.
+    ex = buildMultiParamExample builder
 
 prop_multiParam_Empty maker (Legal a) (Legals bs) ms =
   isLeft $ runParser (mkMultiParam maker forms f) []
@@ -419,6 +429,8 @@ prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
     f :: Follower [String]
     f = traverse next ms
 
+-- TODO: test *Read and *Char as well.
+-- TODO: Use Forms instead of Legals where possible.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
