@@ -123,6 +123,13 @@ isFree _ = True
 args :: Parser [String]
 args = many (anyArg' "ARG")
 
+-- | An example of a successful parse. Consists of a parser, a sample input,
+-- and a value that the parser is supposed to produce from this input.
+data Example a = Example
+  { parser :: Parser a
+  , inputs :: [String]
+  , value :: a
+  }
 
 -- * Tests for 'flag' and 'flag''.
 
@@ -227,28 +234,37 @@ instance Arbitrary ParamMaker where
   shrink m@(Param metavar desc) = [Param' metavar] ++ genericShrink m
 
 
--- | Represents an example where a specific parser should match a specific
--- block of arguments.
-data ParamExample
+-- | Represents an example where a specific 'param' or 'param'' parser should
+-- match a specific block of arguments.
+data ParamExampleBuilder
   = ParamExample ParamMaker Forms String
   | ParamShortExample ParamMaker Legals NotDash Legals (NonEmptyList Char)
   | ParamLongExample ParamMaker Legals (NonEmptyList Char) Legals String
   deriving (Show, Generic)
 
-paramExample :: ParamExample -> (Parser String, [String], String)
-paramExample (ParamExample maker fs x) =
-  (mkParam maker $ allForms fs, [chosenForm fs, x], x)
-paramExample
-  (ParamShortExample maker (Legals as) (NotDash b) (Legals cs) (NonEmpty x)) =
-  (mkParam maker forms, ['-':b:x], x)
-  where
-    forms = as ++ [['-', b]] ++ cs
-paramExample (ParamLongExample maker (Legals as) (NonEmpty b) (Legals cs) x) =
-  (mkParam maker forms, ["--" ++ b ++ "=" ++ x], x)
-  where
-    forms = as ++ ["--" ++ b] ++ cs
+buildParamExample :: ParamExampleBuilder -> Example String
+buildParamExample (ParamExample maker fs x)
+  = Example
+  { parser = mkParam maker $ allForms fs
+  , inputs = [chosenForm fs, x]
+  , value = x
+  }
+buildParamExample
+  (ParamShortExample maker (Legals as) (NotDash b) (Legals cs) (NonEmpty x))
+  = Example
+  { parser = mkParam maker $ as ++ [['-', b]] ++ cs
+  , inputs = ['-':b:x]
+  , value = x
+  }
+buildParamExample
+  (ParamLongExample maker (Legals as) (NonEmpty b) (Legals cs) x)
+  = Example
+  { parser = mkParam maker $ as ++ ["--" ++ b] ++ cs
+  , inputs = ["--" ++ b ++ "=" ++ x]
+  , value = x
+  }
 
-instance Arbitrary ParamExample where
+instance Arbitrary ParamExampleBuilder where
   arbitrary = oneof
     [ ParamExample <$> arbitrary <*> arbitrary <*> arbitrary
     , ParamShortExample <$> arbitrary <*> arbitrary <*> arbitrary
@@ -260,15 +276,15 @@ instance Arbitrary ParamExample where
   shrink = genericShrink
 
 
-prop_param_Matches example =
-  runParser parser inputs == Right output
+prop_param_Matches builder =
+  runParser (parser ex) (inputs ex) == Right (value ex)
   where
-    (parser, inputs, output) = paramExample example
+    ex = buildParamExample builder
 
-prop_param_Finishes example y =
-  runParser (parser *> args) (inputs ++ [y]) == Right [y]
+prop_param_Finishes builder y =
+  runParser (parser ex *> args) (inputs ex ++ [y]) == Right [y]
   where
-    (parser, inputs, _) = paramExample example
+    ex = buildParamExample builder
 
 prop_param_Skips maker fs x y =
   not (any (`isPrefixOf` y) forms) ==>
