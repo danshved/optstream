@@ -129,7 +129,7 @@ data Example a = Example
     -- ^ Parser under test.
   , inputs :: [String]
     -- ^ Inputs that the parser should successfully consume.
-  , value :: a
+  , result :: a
     -- ^ Value that the parser should produce.
   }
 
@@ -249,21 +249,21 @@ buildParamExample (ParamExample maker fs x)
   = Example
   { parser = mkParam maker $ allForms fs
   , inputs = [chosenForm fs, x]
-  , value = x
+  , result = x
   }
 buildParamExample
   (ParamShortExample maker (Legals as) (NotDash b) (Legals cs) (NonEmpty x))
   = Example
   { parser = mkParam maker $ as ++ [['-', b]] ++ cs
   , inputs = ['-':b:x]
-  , value = x
+  , result = x
   }
 buildParamExample
   (ParamLongExample maker (Legals as) (NonEmpty b) (Legals cs) x)
   = Example
   { parser = mkParam maker $ as ++ ["--" ++ b] ++ cs
   , inputs = ["--" ++ b ++ "=" ++ x]
-  , value = x
+  , result = x
   }
 
 instance Arbitrary ParamExampleBuilder where
@@ -279,7 +279,7 @@ instance Arbitrary ParamExampleBuilder where
 
 
 prop_param_Matches builder =
-  runParser (parser ex) (inputs ex) == Right (value ex)
+  runParser (parser ex) (inputs ex) == Right (result ex)
   where
     ex = buildParamExample builder
 
@@ -356,20 +356,36 @@ instance Arbitrary MultiParamMaker where
   shrink MultiParam' = []
   shrink m@(MultiParam _) = MultiParam':genericShrink m
 
-prop_multiParam_Matches maker (Legals as) (Legal b) (Legals cs) dms =
-  runParser (mkMultiParam maker forms $ traverse next ms) (b:ds) == Right ds
-  where
-    forms = as ++ [b] ++ cs
-    ms = map snd dms  -- Metavariables.
-    ds = map fst dms  -- Arguments that should match them.
 
-prop_multiParam_Finishes maker (Legals as) (Legal b) (Legals cs) dms es =
-  runParser (mkMultiParam maker forms f *> args) ([b] ++ ds ++ es) == Right es
+data MultiParamExampleBuilder
+  = MultiParamExampleBuilder MultiParamMaker Forms [(String, String)]
+  deriving (Show, Generic)
+
+buildMultiParamExample :: MultiParamExampleBuilder -> Example [String]
+buildMultiParamExample (MultiParamExampleBuilder maker fs pairs) = Example
+  { parser = mkMultiParam maker (allForms fs) $ traverse next metavars
+  , inputs = chosenForm fs:xs
+  , result = xs
+  }
   where
-    forms = as ++ [b] ++ cs
-    f = traverse next ms
-    ms = map snd dms  -- Metavariables.
-    ds = map fst dms  -- Arguments that should match them.
+    metavars = map fst pairs  -- Metavariables.
+    xs = map snd pairs        -- Arguments that should match them.
+
+instance Arbitrary MultiParamExampleBuilder where
+  arbitrary =
+    MultiParamExampleBuilder <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+
+prop_multiParam_Matches builder =
+  runParser (parser ex) (inputs ex) == Right (result ex)
+  where
+    ex = buildMultiParamExample builder
+
+prop_multiParam_Finishes builder y =
+  runParser (parser ex *> args) (inputs ex ++ [y]) == Right [y]
+  where
+    ex = buildMultiParamExample builder
 
 prop_multiParam_Skips maker (Legals as) (Legal b) (Legals cs) dms e =
   not (e `elem` forms) ==>
