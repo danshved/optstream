@@ -154,6 +154,7 @@ mkFlagSep :: FlagMaker -> [OptionForm] -> Parser ()
 mkFlagSep Flag' opts = flagSep' opts
 mkFlagSep (Flag desc) opts = flagSep opts desc
 
+
 instance Arbitrary FlagMaker where
   arbitrary = oneof [pure Flag', Flag <$> arbitrary]
 
@@ -219,7 +220,7 @@ prop_flagSep_NotMatchesBundle maker cs =
 
 
 
--- * Tests for 'param' and 'param''
+-- * Tests for 'param' and co.
 
 -- | Represents a choice between 'param' and 'param''.
 data ParamMaker
@@ -319,6 +320,8 @@ prop_param_NotMatches maker fs c d =
     forms = allForms fs
 
 
+-- * Tests for 'freeArg' and co.
+
 data FreeArgMaker
   = FreeArg' String
   | FreeArg String String
@@ -337,14 +340,38 @@ instance Arbitrary FreeArgMaker where
   shrink m@(FreeArg' _) = genericShrink m
   shrink m@(FreeArg metavar _) = FreeArg' metavar:genericShrink m
 
-prop_freeArg_Matches maker (Free a) =
-  runParser (mkFreeArg maker) [a] == Right a
 
-prop_freeArg_Finishes maker (Free a) bs =
-  runParser (mkFreeArg maker *> args) (a:bs) == Right bs
+data FreeArgExampleBuilder = FreeArgExample FreeArgMaker Free
+  deriving (Show, Generic)
 
-prop_freeArg_Skips maker (Free a) b =
-  runParser (mkFreeArg maker #> args) ['-':b, a] == Right ['-':b]
+buildFreeArgExample :: FreeArgExampleBuilder -> Example String
+buildFreeArgExample (FreeArgExample maker (Free x)) = Example
+  { parser = mkFreeArg maker
+  , inputs = [x]
+  , result = x
+  , consumes = freeArgs
+  }
+
+instance Arbitrary FreeArgExampleBuilder where
+  arbitrary = FreeArgExample <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+
+prop_freeArg_Matches builder =
+  runParser (parser ex) (inputs ex) == Right (result ex)
+  where
+    ex = buildFreeArgExample builder
+
+prop_freeArg_Finishes builder y =
+  runParser (parser ex *> args) (inputs ex ++ [y]) == Right [y]
+  where
+    ex = buildFreeArgExample builder
+
+prop_freeArg_Skips builder y =
+  not (y `member` consumes ex) ==>
+  runParser (parser ex #> args) (y:inputs ex) == Right [y]
+  where
+    ex = buildFreeArgExample builder
 
 prop_freeArg_Empty maker =
   isLeft $ runParser (mkFreeArg maker) []
@@ -431,6 +458,7 @@ prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
 
 -- TODO: test *Read and *Char as well.
 -- TODO: Use Forms instead of Legals where possible.
+-- TODO: improve distribution of arbitrary argument strings.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
