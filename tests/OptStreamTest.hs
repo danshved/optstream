@@ -1,7 +1,9 @@
+{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import Data.Either
 import Data.List
+import GHC.Generics
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
@@ -33,11 +35,7 @@ tests =
 
   , testGroup "param'"
     [ testProperty "Matches"       prop_param_Matches
-    , testProperty "MatchesShort"  prop_param_MatchesShort
-    , testProperty "MatchesLong"   prop_param_MatchesLong
     , testProperty "Finishes"      prop_param_Finishes
-    , testProperty "FinishesShort" prop_param_FinishesShort
-    , testProperty "FinishesLong"  prop_param_FinishesLong
     , testProperty "Empty"         prop_param_Empty
     , testProperty "MissingArg"    prop_param_MissingArg
     , testProperty "NotMatches"    prop_param_NotMatches
@@ -89,7 +87,7 @@ instance Arbitrary Legals where
 
 -- | Represents a set of legal option forms with one of them selected.
 data Forms = Forms Legals Legal Legals
-  deriving Show
+  deriving (Show, Generic)
 
 allForms :: Forms -> [OptionForm]
 allForms (Forms (Legals as) (Legal b) (Legals cs)) = as ++ [b] ++ cs
@@ -99,11 +97,7 @@ chosenForm (Forms _ (Legal x) _) = x
 
 instance Arbitrary Forms where
   arbitrary = Forms <$> arbitrary <*> arbitrary <*> arbitrary
-
-  shrink (Forms x y z) =
-    [Forms x' y z | x' <- shrink x] ++
-    [Forms x y' z | y' <- shrink y] ++
-    [Forms x y z' | z' <- shrink z]
+  shrink = genericShrink
 
 -- | Represents an arbitrary character other than '-'.
 newtype NotDash = NotDash { unNotDash :: Char }
@@ -210,13 +204,14 @@ prop_flagSep_NotMatchesBundle maker cs =
     p = sequenceA [mkFlagSep maker [['-', c]] | NotDash c <- cs]
 
 
+
 -- * Tests for 'param' and 'param''
 
 -- | Represents a choice between 'param' and 'param''.
 data ParamMaker
   = Param' String
   | Param String String
-  deriving Show
+  deriving (Show, Generic)
 
 mkParam :: ParamMaker -> [OptionForm] -> Parser String
 mkParam (Param' metavar) opts = param' opts metavar
@@ -228,45 +223,56 @@ instance Arbitrary ParamMaker where
     , Param <$> arbitrary <*> arbitrary
     ]
 
-  shrink (Param' metavar) = [Param' metavar' | metavar' <- shrink metavar]
-  shrink (Param metavar desc) = [Param' metavar] ++
-    [Param metavar desc' | desc' <- shrink desc] ++
-    [Param metavar' desc | metavar' <- shrink metavar]
+  shrink m@(Param' metavar) = genericShrink m
+  shrink m@(Param metavar desc) = [Param' metavar] ++ genericShrink m
 
-prop_param_Matches maker fs x =
-  runParser (mkParam maker $ allForms fs) [chosenForm fs, x] == Right x
 
-prop_param_MatchesShort maker (Legals as) (NotDash b) (Legals cs) (NonEmpty d) =
-  runParser (mkParam maker forms) ['-':b:d] == Right d
+-- | Represents an example where a specific parser should match a specific
+-- block of arguments.
+data ParamExample
+  = ParamExample ParamMaker Forms String
+  | ParamShortExample ParamMaker Legals NotDash Legals (NonEmptyList Char)
+  | ParamLongExample ParamMaker Legals (NonEmptyList Char) Legals String
+  deriving (Show, Generic)
+
+paramExample :: ParamExample -> (Parser String, [String], String)
+paramExample (ParamExample maker fs x) =
+  (mkParam maker $ allForms fs, [chosenForm fs, x], x)
+paramExample
+  (ParamShortExample maker (Legals as) (NotDash b) (Legals cs) (NonEmpty x)) =
+  (mkParam maker forms, ['-':b:x], x)
   where
     forms = as ++ [['-', b]] ++ cs
-
-prop_param_MatchesLong maker (Legals as) (NonEmpty b) (Legals cs) d =
-  runParser (mkParam maker forms) ["--" ++ b ++ "=" ++ d] == Right d
+paramExample (ParamLongExample maker (Legals as) (NonEmpty b) (Legals cs) x) =
+  (mkParam maker forms, ["--" ++ b ++ "=" ++ x], x)
   where
     forms = as ++ ["--" ++ b] ++ cs
 
-prop_param_Finishes maker fs x ys =
-  runParser (mkParam maker forms *> args) (f:x:ys) == Right ys
-  where
-    forms = allForms fs
-    f = chosenForm fs
+instance Arbitrary ParamExample where
+  arbitrary = oneof
+    [ ParamExample <$> arbitrary <*> arbitrary <*> arbitrary
+    , ParamShortExample <$> arbitrary <*> arbitrary <*> arbitrary
+        <*> arbitrary <*> arbitrary
+    , ParamLongExample <$> arbitrary <*> arbitrary <*> arbitrary
+        <*> arbitrary <*> arbitrary
+    ]
 
-prop_param_FinishesShort
-  maker (Legals as) (NotDash b) (Legals cs) (NonEmpty d) es =
-  runParser (mkParam maker forms *> args) (('-':b:d):es) == Right es
-  where
-    forms = as ++ [['-', b]] ++ cs
+  shrink = genericShrink
 
-prop_param_FinishesLong maker (Legals as) (NonEmpty b) (Legals cs) d es =
-  runParser (mkParam maker forms *> args) (assign:es) == Right es
-  where
-    forms = as ++ ["--" ++ b] ++ cs
-    assign = "--" ++ b ++ "=" ++ d
 
-prop_param_Skips maker fs d e =
-  not (any (`isPrefixOf` e) forms) ==>
-  runParser (mkParam maker forms #> args) [e, chosenForm fs, d] == Right [e]
+prop_param_Matches example =
+  runParser parser inputs == Right output
+  where
+    (parser, inputs, output) = paramExample example
+
+prop_param_Finishes example y =
+  runParser (parser *> args) (inputs ++ [y]) == Right [y]
+  where
+    (parser, inputs, _) = paramExample example
+
+prop_param_Skips maker fs x y =
+  not (any (`isPrefixOf` y) forms) ==>
+  runParser (mkParam maker forms #> args) [y, chosenForm fs, x] == Right [y]
   where
     forms = allForms fs
 
