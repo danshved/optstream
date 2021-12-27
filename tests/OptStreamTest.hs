@@ -1,9 +1,7 @@
-{-# LANGUAGE DeriveGeneric #-}  -- TODO: remove from here.
 module Main where
 
 import Data.Either
 import Data.List
-import GHC.Generics  -- TODO: remove from here.
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
