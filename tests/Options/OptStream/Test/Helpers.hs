@@ -99,6 +99,35 @@ intersectChunks f@FreeArgs p@(WithPrefix _) = intersectChunks p f
 -- * Producing atomic parsers for testing
 
 
+arbitraryShort :: Gen OptionForm
+arbitraryShort = do
+  c <- arbitrary `suchThat` (/= '-')
+  return ['-', c]
+
+shrinkShort :: OptionForm -> [OptionForm]
+shrinkShort ['-', c] | c /= '-' = [['-', c'] | c' <- shrink c, c' /= '-']
+shrinkShort _ = []
+
+arbitraryLong :: Gen OptionForm
+arbitraryLong = do
+  s <- arbitrary `suchThat` (not . P.null)
+  return $ '-':'-':s
+
+shrinkLong :: OptionForm -> [OptionForm]
+shrinkLong ('-':'-':s@(_:_)) = ['-':'-':s' | s' <- shrink s, not $ P.null s']
+shrinkLong _ = []
+
+arbitraryLegal :: Gen OptionForm
+arbitraryLegal = oneof [arbitraryShort, arbitraryLong]
+
+shrinkLegal :: OptionForm -> [OptionForm]
+shrinkLegal s@('-':'-':c:_)
+  | c /= '-' = ['-', c]:shrinkLong s
+  | otherwise = shrinkLong s
+shrinkLegal s@('-':c:[])
+  | c /= '-' = shrinkShort s
+shrinkLegal _ = []
+
 -- | Represents an arbitrary character other than '-'.
 newtype NotDash = NotDash { unNotDash :: Char }
   deriving Show
@@ -112,21 +141,9 @@ instance Arbitrary NotDash where
 newtype Legal = Legal { unLegal :: OptionForm }
   deriving Show
 
--- TODO: reuse NotDash and NonEmpty here.
 instance Arbitrary Legal where
-  arbitrary = oneof
-    [ do c <- arbitrary `suchThat` (/= '-')
-         return $ Legal ['-', c]
-    , do s <- arbitrary `suchThat` (/= "")
-         return $ Legal ('-':'-':s)
-    ]
-
-  -- TODO: don't use abc, use s's first character instead.
-  shrink (Legal ('-':'-':s)) = [Legal ('-':'-':s') | s' <- shrink s, s' /= ""]
-    ++ [Legal ['-', c] | c <- "abc"]
-  shrink (Legal ['-', c]) = [Legal ['-', c'] | c' <- shrink c, c' /= '-']
-  shrink _ = []
-
+  arbitrary = Legal <$> arbitraryLegal
+  shrink (Legal s) = [Legal s' | s' <- shrinkLegal s]
 
 -- | Represents an arbitrary list of legal option forms (possibly empty).
 newtype Legals = Legals { unLegals :: [OptionForm] }
@@ -134,7 +151,7 @@ newtype Legals = Legals { unLegals :: [OptionForm] }
 
 instance Arbitrary Legals where
   arbitrary = Legals . map unLegal <$> arbitrary
-  shrink (Legals ss) = map Legals $ shrinkList (map unLegal . shrink . Legal) ss
+  shrink (Legals ss) = map Legals $ shrinkList shrinkLegal ss
 
 
 -- TODO: hide Legal and Legals from the constructor below to make Show output
@@ -142,18 +159,24 @@ instance Arbitrary Legals where
 
 
 -- | Represents a set of legal option forms with one of them selected.
-data Forms = Forms Legals Legal Legals
+data Forms = Forms [OptionForm] OptionForm [OptionForm]
   deriving (Show, Generic)
 
 allForms :: Forms -> [OptionForm]
-allForms (Forms (Legals as) (Legal b) (Legals cs)) = as ++ [b] ++ cs
+allForms (Forms as b cs) = as ++ [b] ++ cs
 
 chosenForm :: Forms -> OptionForm
-chosenForm (Forms _ (Legal x) _) = x
+chosenForm (Forms _ x _) = x
 
 instance Arbitrary Forms where
-  arbitrary = Forms <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
+  arbitrary = Forms
+    <$> listOf arbitraryLegal
+    <*> arbitraryLegal
+    <*> listOf arbitraryLegal
+  shrink (Forms as b cs) =
+    [Forms as' b cs | as' <- shrinkList shrinkLegal as]
+    ++ [Forms as b' cs | b' <- shrinkLegal b]
+    ++ [Forms as b cs' | cs' <- shrinkList shrinkLegal cs]
 
 
 -- | Represents a choice between a parser with help (e.g. 'param') or without
