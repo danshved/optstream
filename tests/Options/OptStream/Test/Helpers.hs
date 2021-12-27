@@ -187,16 +187,16 @@ instance Arbitrary ValueType where
 
 
 -- | Represents a choice between flags with and without bundling, e.g. 'flag'
--- vs 'flag''.
+-- vs 'flagSep'.
 data Bundling
-  = WithBundling
-  | WithoutBundling
+  = WithoutBundling
+  | WithBundling
   deriving Show
 
 instance Arbitrary Bundling where
-  arbitrary = elements [WithBundling, WithoutBundling]
+  arbitrary = elements [WithoutBundling, WithBundling]
 
-  shrink WithoutBundling = [WithBundling]
+  shrink WithBundling = [WithoutBundling]
   shrink _ = []
 
 
@@ -246,6 +246,7 @@ mkNext TypeString mv = next mv
 mkNext TypeReadInt mv = show <$> (nextRead mv :: Follower Int)
 mkNext TypeChar mv = (:[]) <$> nextChar mv
 
+-- TODO: introduce mkFollower to simplify usages of mkMultiParam
 
 
 -- * Producing command line examples for testing

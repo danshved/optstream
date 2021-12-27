@@ -184,28 +184,30 @@ prop_multiParam_Skips builder y =
   where
     ex = buildMultiParamExample builder
 
-prop_multiParam_Empty maker (Legal a) (Legals bs) ms =
-  isLeft $ runParser (mkMultiParam maker forms f) []
-  where
-    forms = a:bs
-    f :: Follower [String]
-    f = traverse next ms
+-- TODO: further improve the below tests, using mkNext everywhere.
 
-prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
+prop_multiParam_Empty help fs pairs =
+  isLeft $ runParser parser []
+  where
+    parser = mkMultiParam help (allForms fs) f
+    f :: Follower [String]
+    f = traverse toNext pairs
+    toNext (metavar, valueType) = mkNext valueType metavar
+
+prop_multiParam_NotMatches help fs ms c cs =
   not (c `elem` forms) ==>
-  isLeft $ runParser (mkMultiParam maker forms f *> args) (c:cs)
+  isLeft $ runParser (mkMultiParam help forms f *> args) (c:cs)
   where
-    forms = a:bs
+    forms = allForms fs
     f :: Follower [String]
     f = traverse next ms
 
-prop_multiParam_NotEnough
-  maker (Legals as) (Legal b) (Legals cs) dms (NonEmpty ms) =
-  isLeft $ runParser (mkMultiParam maker forms $ traverse next ms') (b:ds)
+prop_multiParam_NotEnough help fs dms (NonEmpty ms) =
+  isLeft $ runParser parser (chosenForm fs:ds)
   where
-    forms = as ++ [b] ++ cs
     ms' = map snd dms ++ ms  -- Metavariables.
     ds = map fst dms         -- Arguments that should match part of them.
+    parser = mkMultiParam help (allForms fs) $ traverse next ms'
 
 
 -- TODO: Use Forms instead of Legals where possible.
