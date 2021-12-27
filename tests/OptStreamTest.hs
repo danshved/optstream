@@ -16,25 +16,17 @@ main = defaultMain tests
 
 tests :: [Test]
 tests =
-  [ testGroup "flag"
-    [ testProperty "Matches"       prop_flag_Matches
-    , testProperty "Finishes"      prop_flag_Finishes
-    , testProperty "Empty"         prop_flag_Empty
-    , testProperty "NotMatches"    prop_flag_NotMatches
-    , testProperty "Skips"         prop_flag_Skips
-    , testProperty "MatchesBundle" prop_flag_MatchesBundle
+  [ testGroup "flag*"
+    [ testProperty "Matches"          prop_flag_Matches
+    , testProperty "Finishes"         prop_flag_Finishes
+    , testProperty "Empty"            prop_flag_Empty
+    , testProperty "NotMatches"       prop_flag_NotMatches
+    , testProperty "Skips"            prop_flag_Skips
+    , testProperty "MatchesBundle"    prop_flag_MatchesBundle
+    , testProperty "NotMatchesBundle" prop_flag_NotMatchesBundle
     ]
 
-  , testGroup "flagSep"
-    [ testProperty "Matches"          prop_flagSep_Matches
-    , testProperty "Finishes"         prop_flagSep_Finishes
-    , testProperty "Empty"            prop_flagSep_Empty
-    , testProperty "NotMatches"       prop_flagSep_NotMatches
-    , testProperty "Skips"            prop_flagSep_Skips
-    , testProperty "NotMatchesBundle" prop_flagSep_NotMatchesBundle
-    ]
-
-  , testGroup "param"
+  , testGroup "param*"
     [ testProperty "Matches"       prop_param_Matches
     , testProperty "Finishes"      prop_param_Finishes
     , testProperty "Empty"         prop_param_Empty
@@ -43,7 +35,7 @@ tests =
     , testProperty "Skips"         prop_param_Skips
     ]
 
-  , testGroup "freeArg"
+  , testGroup "freeArg*"
     [ testProperty "Matches"    prop_freeArg_Matches
     , testProperty "Finishes"   prop_freeArg_Finishes
     , testProperty "Empty"      prop_freeArg_Empty
@@ -51,7 +43,7 @@ tests =
     , testProperty "Skips"      prop_freeArg_Skips
     ]
 
-  , testGroup "multiParam"
+  , testGroup "multiParam*"
     [ testProperty "Matches"    prop_multiParam_Matches
     , testProperty "Finishes"   prop_multiParam_Finishes
     , testProperty "Empty"      prop_multiParam_Empty
@@ -61,7 +53,7 @@ tests =
     ]
   ]
 
--- Helper parser that collects all the arguments that it gets.
+-- | Helper parser that collects all the arguments that it gets.
 args :: Parser [String]
 args = many (anyArg' "ARG")
 
@@ -69,61 +61,47 @@ args = many (anyArg' "ARG")
 
 -- * Tests for @flag*@
 
-prop_flag_Matches help fs =
-  runParser (mkFlag help $ allForms fs) [chosenForm fs] == Right ()
+prop_flag_Matches help bundling fs =
+  runParser parser [chosenForm fs] == Right ()
+  where
+    parser = mkFlag help bundling (allForms fs)
 
-prop_flag_Finishes help fs xs =
-  runParser (mkFlag help (allForms fs) *> args) (chosenForm fs:xs) == Right xs
+prop_flag_Finishes help bundling fs x =
+  runParser (parser *> args) [chosenForm fs, x] == Right [x]
+  where
+    parser = mkFlag help bundling (allForms fs)
 
-prop_flag_Skips help fs x =
+prop_flag_Skips help bundling fs x =
   not (x `elem` forms) ==>
-  runParser (mkFlag help forms #> args) [x, chosenForm fs] == Right [x]
+  runParser (parser #> args) [x, chosenForm fs] == Right [x]
   where
     forms = allForms fs
+    parser = mkFlag help bundling forms
 
-prop_flag_Empty help fs =
-  isLeft $ runParser (mkFlag help $ allForms fs) []
+prop_flag_Empty help bundling fs =
+  isLeft $ runParser parser []
+  where
+    parser = mkFlag help bundling (allForms fs)
 
-prop_flag_NotMatches help fs x =
+prop_flag_NotMatches help bundling fs x =
   not (x `elem` forms) ==>
-  isLeft $ runParser (mkFlag help forms) [x]
+  isLeft $ runParser parser [x]
   where
     forms = allForms fs
+    parser = mkFlag help bundling forms
 
 prop_flag_MatchesBundle help (NonEmpty cs) =
-  runParser p ['-':chars] == Right [() | c <- chars]
+  runParser parser ['-':chars] == Right [() | c <- chars]
   where
-    p = sequenceA [mkFlag help [['-', c]] | c <- chars]
     chars = [c | NotDash c <- cs]
+    parser = sequenceA [mkFlag help WithBundling [['-', c]] | c <- chars]
 
-
-prop_flagSep_Matches help fs =
-  runParser (mkFlagSep help $ allForms fs) [chosenForm fs] == Right ()
-
-prop_flagSep_Finishes help fs xs =
-  runParser (mkFlagSep help (allForms fs) *> args) (chosenForm fs:xs)
-    == Right xs
-
-prop_flagSep_Skips help fs x =
-  not (x `elem` forms) ==>
-  runParser (mkFlagSep help forms #> args) [x, chosenForm fs] == Right [x]
+prop_flag_NotMatchesBundle help cs =
+  length chars >= 2 ==>
+  isLeft $ runParser parser ['-':chars]
   where
-    forms = allForms fs
-
-prop_flagSep_Empty help fs =
-  isLeft $ runParser (mkFlagSep help $ allForms fs) []
-
-prop_flagSep_NotMatches help fs x =
-  not (x `elem` forms) ==>
-  isLeft $ runParser (mkFlagSep help forms) [x]
-  where
-    forms = allForms fs
-
-prop_flagSep_NotMatchesBundle help cs =
-  length cs >= 2 ==>
-  isLeft $ runParser p ['-':map unNotDash cs]
-  where
-    p = sequenceA [mkFlagSep help [['-', c]] | NotDash c <- cs]
+    chars = [c | NotDash c <- cs]
+    parser = sequenceA [mkFlag help WithoutBundling [['-', c]] | c <- chars]
 
 
 

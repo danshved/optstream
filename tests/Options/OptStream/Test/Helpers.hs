@@ -186,6 +186,20 @@ instance Arbitrary ValueType where
   shrink _ = [TypeString]
 
 
+-- | Represents a choice between flags with and without bundling, e.g. 'flag'
+-- vs 'flag''.
+data Bundling
+  = WithBundling
+  | WithoutBundling
+  deriving Show
+
+instance Arbitrary Bundling where
+  arbitrary = elements [WithBundling, WithoutBundling]
+
+  shrink WithoutBundling = [WithBundling]
+  shrink _ = []
+
+
 -- | Synonym for better readability.
 type Metavar = String
 
@@ -193,13 +207,11 @@ type Metavar = String
 -- TODO: unite mkFlag and mkFlagSep.
 
 -- | Makes an arbitrary @flag*@ parser for testing.
-mkFlag :: HelpChoice -> [OptionForm] -> Parser ()
-mkFlag WithoutHelp opts = flag' opts
-mkFlag (WithHelp desc) opts = flag opts desc
-
-mkFlagSep :: HelpChoice -> [OptionForm] -> Parser ()
-mkFlagSep WithoutHelp opts = flagSep' opts
-mkFlagSep (WithHelp desc) opts = flagSep opts desc
+mkFlag :: HelpChoice -> Bundling -> [OptionForm] -> Parser ()
+mkFlag WithoutHelp WithoutBundling opts = flagSep' opts
+mkFlag WithoutHelp WithBundling opts = flag' opts
+mkFlag (WithHelp desc) WithoutBundling opts = flagSep opts desc
+mkFlag (WithHelp desc) WithBundling opts = flag opts desc
 
 -- | Makes an arbitrary @param*@ parser for testing.
 mkParam :: HelpChoice -> ValueType -> [OptionForm] -> Metavar -> Parser String
