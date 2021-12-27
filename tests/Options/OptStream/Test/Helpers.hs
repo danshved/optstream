@@ -100,7 +100,7 @@ intersectChunks f@FreeArgs p@(WithPrefix _) = intersectChunks p f
 
 
 -- | Represents an arbitrary character other than '-'.
-newtype NotDash = NotDash { unNotDash :: Char }
+newtype NotDash = NotDash Char
   deriving Show
 
 instance Arbitrary NotDash where
@@ -234,8 +234,6 @@ instance Arbitrary Bundling where
 -- | Synonym for better readability.
 type Metavar = String
 
-
--- TODO: unite mkFlag and mkFlagSep.
 
 -- | Makes an arbitrary @flag*@ parser for testing.
 mkFlag :: HelpChoice -> Bundling -> [OptionForm] -> Parser ()
@@ -382,7 +380,11 @@ instance Arbitrary ParamExample where
     , ParamLongExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
     ]
 
-  shrink = genericShrink  -- TODO shrink to ParamExample too.
+  shrink e@(ParamShortExample help (ChosenShort fs) mv (NonEmptyValue val)) =
+    ParamExample help fs mv val:genericShrink e
+  shrink e@(ParamLongExample help (ChosenLong fs) mv val) =
+    ParamExample help fs mv val:genericShrink e
+  shrink e = genericShrink e
 
 buildParamExample :: ParamExample -> Example String
 buildParamExample (ParamExample help fs metavar val)
@@ -395,27 +397,15 @@ buildParamExample (ParamExample help fs metavar val)
   where
     forms = allForms fs
     x = formatValue val
+
 buildParamExample
   (ParamShortExample help (ChosenShort fs) metavar (NonEmptyValue val))
-  = Example
-  { parser = mkParam help (valueType val) forms metavar
-  , inputs = [chosenForm fs ++ x]
-  , result = x
-  , consumes = mconcat $ map withPrefix forms
-  }
-  where
-    forms = allForms fs
-    x = formatValue val
+  = (buildParamExample $ ParamExample help fs metavar val)
+  { inputs = [chosenForm fs ++ formatValue val] }
+
 buildParamExample (ParamLongExample help (ChosenLong fs) metavar val)
-  = Example
-  { parser = mkParam help (valueType val) forms metavar
-  , inputs = [chosenForm fs ++ "=" ++ x]
-  , result = x
-  , consumes = mconcat $ map withPrefix forms
-  }
-  where
-    forms = allForms fs
-    x = formatValue val
+  = (buildParamExample $ ParamExample help fs metavar val)
+  { inputs = [chosenForm fs ++ "=" ++ formatValue val] }
 
 
 -- | Represents an example where a @freeArg*@ parser should match a specific

@@ -210,9 +210,9 @@ prop_multiParam_NotEnough help fs dms (NonEmpty ms) =
     parser = mkMultiParam help (allForms fs) $ traverse next ms'
 
 
--- TODO: Use Forms instead of Legals where possible.
 -- TODO: improve distribution of arbitrary argument strings.
 -- TODO: test that defaults for all atomic parsers can be added with <|> orElse.
+-- TODO: Use === to improve output on failures.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
