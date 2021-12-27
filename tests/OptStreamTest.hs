@@ -226,69 +226,70 @@ prop_flagSep_NotMatchesBundle maker cs =
 
 -- * Tests for 'param' and co.
 
--- | Represents a choice between 'param' and 'param''.
-data ParamMaker
-  = Param' String
-  | Param String String
-  deriving (Show, Generic)
+mkParam :: HelpChoice -> ValueType -> [OptionForm] -> String -> Parser String
+mkParam WithoutHelp TypeString opts metavar = param' opts metavar
+mkParam WithoutHelp TypeReadInt opts metavar =
+  show <$> (paramRead' opts metavar :: Parser Int)
+mkParam WithoutHelp TypeChar opts metavar = (:[]) <$> paramChar' opts metavar
+mkParam (WithHelp desc) TypeString opts metavar = param opts metavar desc
+mkParam (WithHelp desc) TypeReadInt opts metavar =
+  show <$> (paramRead opts metavar desc :: Parser Int)
+mkParam (WithHelp desc) TypeChar opts metavar =
+  (:[]) <$> paramChar opts metavar desc
 
-mkParam :: ParamMaker -> [OptionForm] -> Parser String
-mkParam (Param' metavar) opts = param' opts metavar
-mkParam (Param metavar desc) opts = param opts metavar desc
+-- TODO: introduce helpers like Forms, but separate for short and long selected
+-- form.
 
-instance Arbitrary ParamMaker where
-  arbitrary = oneof
-    [ Param' <$> arbitrary
-    , Param <$> arbitrary <*> arbitrary
-    ]
-
-  shrink m@(Param' _) = genericShrink m
-  shrink m@(Param metavar _) = Param' metavar:genericShrink m
-
-
--- | Represents an example where a specific 'param' or 'param'' parser should
--- match a specific block of arguments.
+-- | Represents an example where a specific @param*@ parser should match a
+-- specific block of arguments.
 data ParamExampleBuilder
-  = ParamExample ParamMaker Forms String
-  | ParamShortExample ParamMaker Legals NotDash Legals (NonEmptyList Char)
-  | ParamLongExample ParamMaker Legals (NonEmptyList Char) Legals String
+  = ParamExample HelpChoice Forms String Value
+  | ParamShortExample HelpChoice Legals NotDash Legals String NonEmptyValue
+  | ParamLongExample HelpChoice Legals (NonEmptyList Char) Legals String Value
   deriving (Show, Generic)
 
 buildParamExample :: ParamExampleBuilder -> Example String
-buildParamExample (ParamExample maker fs x)
+buildParamExample (ParamExample help fs metavar val)
   = Example
-  { parser = mkParam maker $ allForms fs
+  { parser = mkParam help (valueType val) (allForms fs) metavar
   , inputs = [chosenForm fs, x]
   , result = x
   , consumes = mconcat . map withPrefix $ allForms fs
   }
+  where
+    x = formatValue val
 buildParamExample
-  (ParamShortExample maker (Legals as) (NotDash b) (Legals cs) (NonEmpty x))
+  (ParamShortExample help (Legals as) (NotDash b) (Legals cs) metavar (NonEmptyValue val))
   = Example
-  { parser = mkParam maker forms
+  { parser = mkParam help (valueType val) forms metavar
   , inputs = ['-':b:x]
   , result = x
   , consumes = mconcat $ map withPrefix forms
   }
   where
     forms = as ++ [['-', b]] ++ cs
+    x = formatValue val
 buildParamExample
-  (ParamLongExample maker (Legals as) (NonEmpty b) (Legals cs) x)
+  (ParamLongExample help (Legals as) (NonEmpty b) (Legals cs) metavar val)
   = Example
-  { parser = mkParam maker forms
+  { parser = mkParam help (valueType val) forms metavar
   , inputs = ["--" ++ b ++ "=" ++ x]
   , result = x
   , consumes = mconcat $ map withPrefix forms
   }
   where
     forms = as ++ ["--" ++ b] ++ cs
+    x = formatValue val
 
 instance Arbitrary ParamExampleBuilder where
   arbitrary = oneof
-    [ ParamExample <$> arbitrary <*> arbitrary <*> arbitrary
-    , ParamShortExample <$> arbitrary <*> arbitrary <*> arbitrary
+    [ ParamExample
+        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+    , ParamShortExample
+        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
         <*> arbitrary <*> arbitrary
-    , ParamLongExample <$> arbitrary <*> arbitrary <*> arbitrary
+    , ParamLongExample
+        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
         <*> arbitrary <*> arbitrary
     ]
 
@@ -311,17 +312,22 @@ prop_param_Skips builder y =
   where
     ex = buildParamExample builder
 
-prop_param_Empty maker fs =
-  isLeft $ runParser (mkParam maker $ allForms fs) []
+prop_param_Empty help valueType metavar fs =
+  isLeft $ runParser parser []
+  where
+    parser = mkParam help valueType (allForms fs) metavar
 
-prop_param_MissingArg maker fs =
-  isLeft $ runParser (mkParam maker $ allForms fs) [chosenForm fs]
+prop_param_MissingArg help valueType metavar fs =
+  isLeft $ runParser parser [chosenForm fs]
+  where
+    parser = mkParam help valueType (allForms fs) metavar
 
-prop_param_NotMatches maker fs c d =
+prop_param_NotMatches help valueType metavar fs c d =
   not (any (`isPrefixOf` c) forms) ==>
-  isLeft $ runParser (mkParam maker forms *> args) [c, d]
+  isLeft $ runParser (parser *> args) [c, d]
   where
     forms = allForms fs
+    parser = mkParam help valueType forms metavar
 
 
 -- * Tests for 'freeArg' and co.
