@@ -99,6 +99,15 @@ intersectChunks f@FreeArgs p@(WithPrefix _) = intersectChunks p f
 -- * Producing atomic parsers for testing
 
 
+-- | Represents an arbitrary character other than '-'.
+newtype NotDash = NotDash { unNotDash :: Char }
+  deriving Show
+
+instance Arbitrary NotDash where
+  arbitrary = NotDash <$> arbitrary `suchThat` (/= '-')
+  shrink (NotDash c) = [NotDash c' | c' <- shrink c, c' /= '-']
+
+
 arbitraryShort :: Gen OptionForm
 arbitraryShort = do
   c <- arbitrary `suchThat` (/= '-')
@@ -128,55 +137,54 @@ shrinkLegal s@('-':c:[])
   | c /= '-' = shrinkShort s
 shrinkLegal _ = []
 
--- | Represents an arbitrary character other than '-'.
-newtype NotDash = NotDash { unNotDash :: Char }
-  deriving Show
 
-instance Arbitrary NotDash where
-  arbitrary = NotDash <$> arbitrary `suchThat` (/= '-')
-  shrink (NotDash c) = [NotDash c' | c' <- shrink c, c' /= '-']
-
-
--- | Represents an arbitrary legal option form.
-newtype Legal = Legal { unLegal :: OptionForm }
-  deriving Show
-
-instance Arbitrary Legal where
-  arbitrary = Legal <$> arbitraryLegal
-  shrink (Legal s) = [Legal s' | s' <- shrinkLegal s]
-
--- | Represents an arbitrary list of legal option forms (possibly empty).
-newtype Legals = Legals { unLegals :: [OptionForm] }
-  deriving Show
-
-instance Arbitrary Legals where
-  arbitrary = Legals . map unLegal <$> arbitrary
-  shrink (Legals ss) = map Legals $ shrinkList shrinkLegal ss
-
-
--- TODO: hide Legal and Legals from the constructor below to make Show output
--- more readable.
-
-
--- | Represents a set of legal option forms with one of them selected.
+-- | Represents a list of legal option forms with one of them selected.
 data Forms = Forms [OptionForm] OptionForm [OptionForm]
-  deriving (Show, Generic)
+  deriving Show
 
 allForms :: Forms -> [OptionForm]
 allForms (Forms as b cs) = as ++ [b] ++ cs
 
 chosenForm :: Forms -> OptionForm
-chosenForm (Forms _ x _) = x
+chosenForm (Forms _ b _) = b
+
+arbitraryForms :: Gen OptionForm -> Gen Forms
+arbitraryForms arbitraryChosen = Forms
+  <$> listOf arbitraryLegal
+  <*> arbitraryChosen
+  <*> listOf arbitraryLegal
+
+shrinkForms :: (OptionForm -> [OptionForm]) -> Forms -> [Forms]
+shrinkForms shrinkChosen (Forms as b cs)
+    =  [Forms as' b cs | as' <- shrinkList shrinkLegal as]
+    ++ [Forms as b' cs | b' <- shrinkChosen b]
+    ++ [Forms as b cs' | cs' <- shrinkList shrinkLegal cs]
 
 instance Arbitrary Forms where
-  arbitrary = Forms
-    <$> listOf arbitraryLegal
-    <*> arbitraryLegal
-    <*> listOf arbitraryLegal
-  shrink (Forms as b cs) =
-    [Forms as' b cs | as' <- shrinkList shrinkLegal as]
-    ++ [Forms as b' cs | b' <- shrinkLegal b]
-    ++ [Forms as b cs' | cs' <- shrinkList shrinkLegal cs]
+  arbitrary = arbitraryForms arbitraryLegal
+  shrink = shrinkForms shrinkLegal
+
+
+-- | Represents a list of legal option forms with one of them selected. It is
+-- guaranteed that the selected one is always a short form.
+newtype FormsS = ChosenShort Forms
+  deriving Show
+
+instance Arbitrary FormsS where
+  arbitrary = ChosenShort <$> arbitraryForms arbitraryShort
+
+  shrink (ChosenShort fs) =
+    [ChosenShort fs' | fs' <- shrinkForms shrinkShort fs]
+
+
+-- | Represents a list of legal option forms with one of them selected. It is
+-- guaranteed that the selected one is always a long form.
+newtype FormsL = ChosenLong Forms
+  deriving Show
+
+instance Arbitrary FormsL where
+  arbitrary = ChosenLong <$> arbitraryForms arbitraryLong
+  shrink (ChosenLong fs) = [ChosenLong fs' | fs' <- shrinkForms shrinkLong fs]
 
 
 -- | Represents a choice between a parser with help (e.g. 'param') or without
@@ -306,7 +314,7 @@ instance Arbitrary Value where
 
 -- | Like 'Value' but with a restriction that the value's string representation
 -- is not empty.
-newtype NonEmptyValue = NonEmptyValue { unNonEmptyValue :: Value }
+newtype NonEmptyValue = NonEmptyValue Value
   deriving Show
 
 instance Arbitrary NonEmptyValue where
@@ -363,23 +371,15 @@ data Example a = Example
 -- specific block of arguments.
 data ParamExample
   = ParamExample HelpChoice Forms Metavar Value
-  | ParamShortExample HelpChoice Legals NotDash Legals Metavar NonEmptyValue
-  | ParamLongExample HelpChoice Legals (NonEmptyList Char) Legals Metavar Value
+  | ParamShortExample HelpChoice FormsS Metavar NonEmptyValue
+  | ParamLongExample HelpChoice FormsL Metavar Value
   deriving (Show, Generic)
-
--- TODO: introduce helpers like Forms, but separate for short and long selected
--- form.
 
 instance Arbitrary ParamExample where
   arbitrary = oneof
-    [ ParamExample
-        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-    , ParamShortExample
-        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-        <*> arbitrary <*> arbitrary
-    , ParamLongExample
-        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-        <*> arbitrary <*> arbitrary
+    [ ParamExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+    , ParamShortExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+    , ParamLongExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
     ]
 
   shrink = genericShrink  -- TODO shrink to ParamExample too.
@@ -387,34 +387,34 @@ instance Arbitrary ParamExample where
 buildParamExample :: ParamExample -> Example String
 buildParamExample (ParamExample help fs metavar val)
   = Example
-  { parser = mkParam help (valueType val) (allForms fs) metavar
+  { parser = mkParam help (valueType val) forms metavar
   , inputs = [chosenForm fs, x]
   , result = x
-  , consumes = mconcat . map withPrefix $ allForms fs
+  , consumes = mconcat $ map withPrefix forms
   }
   where
+    forms = allForms fs
     x = formatValue val
 buildParamExample
-  (ParamShortExample help (Legals as) (NotDash b) (Legals cs) metavar (NonEmptyValue val))
+  (ParamShortExample help (ChosenShort fs) metavar (NonEmptyValue val))
   = Example
   { parser = mkParam help (valueType val) forms metavar
-  , inputs = ['-':b:x]
+  , inputs = [chosenForm fs ++ x]
   , result = x
   , consumes = mconcat $ map withPrefix forms
   }
   where
-    forms = as ++ [['-', b]] ++ cs
+    forms = allForms fs
     x = formatValue val
-buildParamExample
-  (ParamLongExample help (Legals as) (NonEmpty b) (Legals cs) metavar val)
+buildParamExample (ParamLongExample help (ChosenLong fs) metavar val)
   = Example
   { parser = mkParam help (valueType val) forms metavar
-  , inputs = ["--" ++ b ++ "=" ++ x]
+  , inputs = [chosenForm fs ++ "=" ++ x]
   , result = x
   , consumes = mconcat $ map withPrefix forms
   }
   where
-    forms = as ++ ["--" ++ b] ++ cs
+    forms = allForms fs
     x = formatValue val
 
 
