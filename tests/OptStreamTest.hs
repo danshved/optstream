@@ -60,18 +60,18 @@ args = many (anyArg' "ARG")
 -- * Tests for @flag*@
 
 prop_flag_Matches help bundling fs =
-  runParser parser [chosenForm fs] == Right ()
+  runParser parser [chosenForm fs] === Right ()
   where
     parser = mkFlag help bundling (allForms fs)
 
 prop_flag_Finishes help bundling fs x =
-  runParser (parser *> args) [chosenForm fs, x] == Right [x]
+  runParser (parser *> args) [chosenForm fs, x] === Right [x]
   where
     parser = mkFlag help bundling (allForms fs)
 
 prop_flag_Skips help bundling fs x =
   not (x `elem` forms) ==>
-  runParser (parser #> args) [x, chosenForm fs] == Right [x]
+  runParser (parser #> args) [x, chosenForm fs] === Right [x]
   where
     forms = allForms fs
     parser = mkFlag help bundling forms
@@ -89,7 +89,7 @@ prop_flag_NotMatches help bundling fs x =
     parser = mkFlag help bundling forms
 
 prop_flag_MatchesBundle help (NonEmpty cs) =
-  runParser parser ['-':chars] == Right [() | c <- chars]
+  runParser parser ['-':chars] === Right [() | c <- chars]
   where
     chars = [c | NotDash c <- cs]
     parser = sequenceA [mkFlag help WithBundling [['-', c]] | c <- chars]
@@ -106,18 +106,18 @@ prop_flag_NotMatchesBundle help cs =
 -- * Tests for @param*@
 
 prop_param_Matches builder =
-  runParser (parser ex) (inputs ex) == Right (result ex)
+  runParser (parser ex) (inputs ex) === Right (result ex)
   where
     ex = buildParamExample builder
 
 prop_param_Finishes builder y =
-  runParser (parser ex *> args) (inputs ex ++ [y]) == Right [y]
+  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
     ex = buildParamExample builder
 
 prop_param_Skips builder y =
   not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) == Right [y]
+  runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
     ex = buildParamExample builder
 
@@ -143,18 +143,18 @@ prop_param_MissingArg help valueType metavar fs =
 -- * Tests for @freeArg*@
 
 prop_freeArg_Matches builder =
-  runParser (parser ex) (inputs ex) == Right (result ex)
+  runParser (parser ex) (inputs ex) === Right (result ex)
   where
     ex = buildFreeArgExample builder
 
 prop_freeArg_Finishes builder y =
-  runParser (parser ex *> args) (inputs ex ++ [y]) == Right [y]
+  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
     ex = buildFreeArgExample builder
 
 prop_freeArg_Skips builder y =
   not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) == Right [y]
+  runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
     ex = buildFreeArgExample builder
 
@@ -169,18 +169,18 @@ prop_freeArg_NotMatches help valueType metavar a =
 -- * Tests for @multiParam*@
 
 prop_multiParam_Matches builder =
-  runParser (parser ex) (inputs ex) == Right (result ex)
+  runParser (parser ex) (inputs ex) === Right (result ex)
   where
     ex = buildMultiParamExample builder
 
 prop_multiParam_Finishes builder y =
-  runParser (parser ex *> args) (inputs ex ++ [y]) == Right [y]
+  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
     ex = buildMultiParamExample builder
 
 prop_multiParam_Skips builder y =
   not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) == Right [y]
+  runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
     ex = buildMultiParamExample builder
 
@@ -206,7 +206,7 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
 
 -- TODO: improve distribution of arbitrary argument strings.
 -- TODO: test that defaults for all atomic parsers can be added with <|> orElse.
--- TODO: Use === to improve output on failures.
+-- TODO: Use 'counterexample' to improve readibility of isLeft properties.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also

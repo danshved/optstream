@@ -560,7 +560,7 @@ flag :: [OptionForm]
         -- ^ Description for help.
      -> Parser ()
         -- ^ A parser that succeeds upon consuming the flag.
-flag ss desc = flagHelp ss desc $ flag' ss
+flag opts desc = flagHelp opts desc $ flag' opts
 
 
 -- | Like 'flag' but doesn't generate any help.
@@ -592,7 +592,7 @@ flagSep :: [OptionForm]
            -- ^ Description for help.
         -> Parser ()
            -- ^ A parser that succeeds upon consuming the flag.
-flagSep ss desc = flagHelp ss desc $ flagSep' ss
+flagSep opts desc = flagHelp opts desc $ flagSep' opts
 
 
 -- | Like 'flagSep' but doesn't generate any help.
@@ -760,6 +760,9 @@ addFreeArgHelp func' metavar desc = freeArgHelp metavar desc $ func' metavar
 
 -- | Matches any /free argument/, i.e. any argument that doesn't start with
 -- @-@.  Returns this argument verbatim as a string.
+--
+-- If you want to match any argument, including those starting with @-@, use
+-- 'anyArg'.
 --
 -- Like all the other atomic parsers in this module, 'freeArg' is mandatory. It
 -- can be made optional with @'<|>' 'orElse'@.
@@ -1715,6 +1718,7 @@ withVersionIO' :: String
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' = lift1 . R.withVersionIO'
 
+-- TODO: add anyArgRead et. al.
 
 -- TODO: Check laws for all instances in this file.
 -- TODO: Figure out which laws there are in SubstreamParser.

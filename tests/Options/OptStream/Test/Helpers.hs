@@ -337,7 +337,6 @@ newtype FreeValue = FreeValue { unFreeValue :: Value }
 instance Arbitrary FreeValue where
   arbitrary = FreeValue <$> (arbitrary `suchThat` (isFree . formatValue))
 
-  -- TODO: introduce a helper for such shrinks.
   shrink (FreeValue x) =
     [ FreeValue x'
     | x' <- shrink x
