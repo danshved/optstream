@@ -251,20 +251,6 @@ mkNext TypeChar mv = (:[]) <$> nextChar mv
 -- * Producing command line examples for testing
 
 
--- TODO: Remove if unused (may be superseded by FreeValue).
--- | Represents an arbitrary free argument.
-newtype Free = Free { unFree :: String }
-  deriving Show
-
-instance Arbitrary Free where
-  arbitrary = Free <$> arbitrary `suchThat` isFree
-  shrink (Free s) = [Free s' | s' <- shrink s, isFree s']
-
-isFree :: String -> Bool
-isFree ('-':_) = False
-isFree _ = True
-
-
 -- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or
 -- 'next'.
 data Value
@@ -325,6 +311,10 @@ instance Arbitrary FreeValue where
     , isFree $ formatValue x'
     ]
 
+isFree :: String -> Bool
+isFree ('-':_) = False
+isFree _ = True
+
 
 -- ** Full parse examples
 
@@ -368,7 +358,7 @@ instance Arbitrary ParamExample where
         <*> arbitrary <*> arbitrary
     ]
 
-  shrink = genericShrink
+  shrink = genericShrink  -- TODO shrink to ParamExample too.
 
 buildParamExample :: ParamExample -> Example String
 buildParamExample (ParamExample help fs metavar val)
