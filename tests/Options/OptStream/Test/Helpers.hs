@@ -275,7 +275,10 @@ mkNext TypeString mv = next mv
 mkNext TypeReadInt mv = show <$> (nextRead mv :: Follower Int)
 mkNext TypeChar mv = (:[]) <$> nextChar mv
 
--- TODO: introduce mkFollower to simplify usages of mkMultiParam
+-- | Makes an arbitrary Follower for testing (using only <*>).
+mkFollower :: [(ValueType, Metavar)] -> Follower [String]
+mkFollower = traverse (uncurry mkNext)
+
 
 
 -- * Producing command line examples for testing

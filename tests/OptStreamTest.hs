@@ -184,30 +184,24 @@ prop_multiParam_Skips builder y =
   where
     ex = buildMultiParamExample builder
 
--- TODO: further improve the below tests, using mkNext everywhere.
-
 prop_multiParam_Empty help fs pairs =
   isLeft $ runParser parser []
   where
-    parser = mkMultiParam help (allForms fs) f
-    f :: Follower [String]
-    f = traverse toNext pairs
-    toNext (metavar, valueType) = mkNext valueType metavar
+    parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
-prop_multiParam_NotMatches help fs ms c cs =
+prop_multiParam_NotMatches help fs pairs c cs =
   not (c `elem` forms) ==>
-  isLeft $ runParser (mkMultiParam help forms f *> args) (c:cs)
+  isLeft $ runParser (parser *> args) (c:cs)
   where
     forms = allForms fs
-    f :: Follower [String]
-    f = traverse next ms
+    parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
-prop_multiParam_NotEnough help fs dms (NonEmpty ms) =
+prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
   isLeft $ runParser parser (chosenForm fs:ds)
   where
-    ms' = map snd dms ++ ms  -- Metavariables.
-    ds = map fst dms         -- Arguments that should match part of them.
-    parser = mkMultiParam help (allForms fs) $ traverse next ms'
+    ds = [formatValue val | (_, val) <- matches]
+    pairs' = [(valueType val, mv) | (mv, val) <- matches] ++ pairs
+    parser = mkMultiParam help (allForms fs) (mkFollower pairs')
 
 
 -- TODO: improve distribution of arbitrary argument strings.
