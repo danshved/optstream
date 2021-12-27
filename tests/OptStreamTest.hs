@@ -380,36 +380,87 @@ prop_freeArg_NotMatches maker a =
   isLeft $ runParser (mkFreeArg maker) ['-':a]
 
 
-data MultiParamMaker
-  = MultiParam'
-  | MultiParam String
+-- | Represents a choice between a parser with help (e.g. 'param') or without
+-- help (e.g. 'param'').
+data HelpChoice
+  = WithoutHelp
+  | WithHelp String
   deriving (Show, Generic)
 
-mkMultiParam :: MultiParamMaker -> [OptionForm] -> Follower a -> Parser a
-mkMultiParam MultiParam' opts f = multiParam' opts f
-mkMultiParam (MultiParam desc) opts f = multiParam opts f desc
+instance Arbitrary HelpChoice where
+  arbitrary = oneof [pure WithoutHelp, WithHelp <$> arbitrary]
 
-instance Arbitrary MultiParamMaker where
-  arbitrary = oneof [pure MultiParam', MultiParam <$> arbitrary]
+  shrink WithoutHelp = []
+  shrink x@(WithHelp _) = WithoutHelp:genericShrink x
 
-  shrink MultiParam' = []
-  shrink m@(MultiParam _) = MultiParam':genericShrink m
+
+-- | Represents a choice between e.g. 'param', 'paramRead', and 'paramChar'.
+data ValueType
+  = TypeString
+  | TypeReadInt
+  | TypeChar
+  deriving (Show, Generic)
+
+instance Arbitrary ValueType where
+  arbitrary = elements [TypeString, TypeReadInt, TypeChar]
+
+  shrink TypeString = []
+  shrink _ = [TypeString]
+
+
+-- | Represents a test value to be parsed with 'param', 'freeArg', or 'next'.
+data Value
+  = ValueString String
+  | ValueReadInt Int
+  | ValueChar Char
+  deriving (Show, Generic)
+
+valueType :: Value -> ValueType
+valueType (ValueString _) = TypeString
+valueType (ValueReadInt _) = TypeReadInt
+valueType (ValueChar _) = TypeChar
+
+formatValue :: Value -> String
+formatValue (ValueString s) = s
+formatValue (ValueReadInt i) = show i
+formatValue (ValueChar c) = [c]
+
+
+instance Arbitrary Value where
+  arbitrary = oneof
+    [ ValueString <$> arbitrary
+    , ValueReadInt <$> arbitrary
+    , ValueChar <$> arbitrary
+    ]
+
+  shrink x@(ValueString _) = genericShrink x
+  shrink x = ValueString (formatValue x):genericShrink x
+
+
+mkMultiParam :: HelpChoice -> [OptionForm] -> Follower a -> Parser a
+mkMultiParam WithoutHelp opts f = multiParam' opts f
+mkMultiParam (WithHelp desc) opts f = multiParam opts f desc
+
+mkNext :: ValueType -> String -> Follower String
+mkNext TypeString metavar = next metavar
+mkNext TypeReadInt metavar = show <$> (nextRead metavar :: Follower Int)
+mkNext TypeChar metavar = (:[]) <$> nextChar metavar
 
 
 data MultiParamExampleBuilder
-  = MultiParamExample MultiParamMaker Forms [(String, String)]
+  = MultiParamExample HelpChoice Forms [(String, Value)]
   deriving (Show, Generic)
 
 buildMultiParamExample :: MultiParamExampleBuilder -> Example [String]
-buildMultiParamExample (MultiParamExample maker fs pairs) = Example
-  { parser = mkMultiParam maker (allForms fs) $ traverse next metavars
+buildMultiParamExample (MultiParamExample helpChoice fs pairs) = Example
+  { parser = mkMultiParam helpChoice (allForms fs) $ traverse toNext pairs
   , inputs = chosenForm fs:xs
   , result = xs
   , consumes = mconcat . map singleton $ allForms fs
   }
   where
-    metavars = map fst pairs  -- Metavariables.
-    xs = map snd pairs        -- Arguments that should match them.
+    toNext (metavar, val) = mkNext (valueType val) metavar
+    xs = map (formatValue . snd) pairs
 
 instance Arbitrary MultiParamExampleBuilder where
   arbitrary =
@@ -459,6 +510,7 @@ prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
 -- TODO: test *Read and *Char as well.
 -- TODO: Use Forms instead of Legals where possible.
 -- TODO: improve distribution of arbitrary argument strings.
+-- TODO: test that defaults for all atomic parsers can be added with <|> orElse.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
