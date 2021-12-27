@@ -19,9 +19,9 @@ tests =
   [ testGroup "flag*"
     [ testProperty "Matches"          prop_flag_Matches
     , testProperty "Finishes"         prop_flag_Finishes
+    , testProperty "Skips"            prop_flag_Skips
     , testProperty "Empty"            prop_flag_Empty
     , testProperty "NotMatches"       prop_flag_NotMatches
-    , testProperty "Skips"            prop_flag_Skips
     , testProperty "MatchesBundle"    prop_flag_MatchesBundle
     , testProperty "NotMatchesBundle" prop_flag_NotMatchesBundle
     ]
@@ -29,27 +29,27 @@ tests =
   , testGroup "param*"
     [ testProperty "Matches"       prop_param_Matches
     , testProperty "Finishes"      prop_param_Finishes
-    , testProperty "Empty"         prop_param_Empty
-    , testProperty "MissingArg"    prop_param_MissingArg
-    , testProperty "NotMatches"    prop_param_NotMatches
     , testProperty "Skips"         prop_param_Skips
+    , testProperty "Empty"         prop_param_Empty
+    , testProperty "NotMatches"    prop_param_NotMatches
+    , testProperty "MissingArg"    prop_param_MissingArg
     ]
 
   , testGroup "freeArg*"
     [ testProperty "Matches"    prop_freeArg_Matches
     , testProperty "Finishes"   prop_freeArg_Finishes
+    , testProperty "Skips"      prop_freeArg_Skips
     , testProperty "Empty"      prop_freeArg_Empty
     , testProperty "NotMatches" prop_freeArg_NotMatches
-    , testProperty "Skips"      prop_freeArg_Skips
     ]
 
   , testGroup "multiParam*"
     [ testProperty "Matches"    prop_multiParam_Matches
     , testProperty "Finishes"   prop_multiParam_Finishes
-    , testProperty "Empty"      prop_multiParam_Empty
-    , testProperty "NotEnough"  prop_multiParam_NotEnough
-    , testProperty "NotMatches" prop_multiParam_NotMatches
     , testProperty "Skips"      prop_multiParam_Skips
+    , testProperty "Empty"      prop_multiParam_Empty
+    , testProperty "NotMatches" prop_multiParam_NotMatches
+    , testProperty "NotEnough"  prop_multiParam_NotEnough
     ]
   ]
 
@@ -128,17 +128,17 @@ prop_param_Empty help valueType metavar fs =
   where
     parser = mkParam help valueType (allForms fs) metavar
 
-prop_param_MissingArg help valueType metavar fs =
-  isLeft $ runParser parser [chosenForm fs]
-  where
-    parser = mkParam help valueType (allForms fs) metavar
-
 prop_param_NotMatches help valueType metavar fs c d =
   not (any (`isPrefixOf` c) forms) ==>
   isLeft $ runParser (parser *> args) [c, d]
   where
     forms = allForms fs
     parser = mkParam help valueType forms metavar
+
+prop_param_MissingArg help valueType metavar fs =
+  isLeft $ runParser parser [chosenForm fs]
+  where
+    parser = mkParam help valueType (allForms fs) metavar
 
 
 
@@ -193,14 +193,6 @@ prop_multiParam_Empty maker (Legal a) (Legals bs) ms =
     f :: Follower [String]
     f = traverse next ms
 
-prop_multiParam_NotEnough
-  maker (Legals as) (Legal b) (Legals cs) dms (NonEmpty ms) =
-  isLeft $ runParser (mkMultiParam maker forms $ traverse next ms') (b:ds)
-  where
-    forms = as ++ [b] ++ cs
-    ms' = map snd dms ++ ms  -- Metavariables.
-    ds = map fst dms         -- Arguments that should match part of them.
-
 prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
   not (c `elem` forms) ==>
   isLeft $ runParser (mkMultiParam maker forms f *> args) (c:cs)
@@ -208,6 +200,14 @@ prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
     forms = a:bs
     f :: Follower [String]
     f = traverse next ms
+
+prop_multiParam_NotEnough
+  maker (Legals as) (Legal b) (Legals cs) dms (NonEmpty ms) =
+  isLeft $ runParser (mkMultiParam maker forms $ traverse next ms') (b:ds)
+  where
+    forms = as ++ [b] ++ cs
+    ms' = map snd dms ++ ms  -- Metavariables.
+    ds = map fst dms         -- Arguments that should match part of them.
 
 
 -- TODO: Use Forms instead of Legals where possible.
