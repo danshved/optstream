@@ -9,7 +9,7 @@ import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 
 import Options.OptStream
-import Options.OptStream.Test.Helpers
+import Options.OptStream.Test.Helpers hiding (null)
 
 main :: IO ()
 main = defaultMain tests
@@ -85,6 +85,10 @@ newtype Legals = Legals { unLegals :: [OptionForm] }
 instance Arbitrary Legals where
   arbitrary = Legals . map unLegal <$> arbitrary
   shrink (Legals ss) = map Legals $ shrinkList (map unLegal . shrink . Legal) ss
+
+
+-- TODO: hide Legal and Legals from the constructor below to make Show output
+-- more readable.
 
 -- | Represents a set of legal option forms with one of them selected.
 data Forms = Forms Legals Legal Legals
@@ -322,38 +326,59 @@ prop_param_NotMatches maker fs c d =
 
 -- * Tests for 'freeArg' and co.
 
-data FreeArgMaker
-  = FreeArg' String
-  | FreeArg String String
-  deriving (Show, Generic)
+newtype NonEmptyValue = NonEmptyValue { unNonEmptyValue :: Value }
+  deriving Show
 
-mkFreeArg :: FreeArgMaker -> Parser String
-mkFreeArg (FreeArg' meta) = freeArg' meta
-mkFreeArg (FreeArg meta desc) = freeArg meta desc
+instance Arbitrary NonEmptyValue where
+  arbitrary = NonEmptyValue
+    <$> (arbitrary `suchThat` (not . null . formatValue))
 
-instance Arbitrary FreeArgMaker where
-  arbitrary = oneof
-    [ FreeArg' <$> arbitrary
-    , FreeArg <$> arbitrary <*> arbitrary
+  shrink (NonEmptyValue x) =
+    [ NonEmptyValue x'
+    | x' <- shrink x
+    , not . null $ formatValue x'
     ]
 
-  shrink m@(FreeArg' _) = genericShrink m
-  shrink m@(FreeArg metavar _) = FreeArg' metavar:genericShrink m
+newtype FreeValue = FreeValue { unFreeValue :: Value }
+  deriving Show
+
+instance Arbitrary FreeValue where
+  arbitrary = FreeValue <$> (arbitrary `suchThat` (isFree . formatValue))
+
+  -- TODO: introduce a helper for such shrinks.
+  shrink (FreeValue x) =
+    [ FreeValue x'
+    | x' <- shrink x
+    , isFree $ formatValue x'
+    ]
+
+mkFreeArg :: HelpChoice -> ValueType -> String -> Parser String
+mkFreeArg WithoutHelp TypeString mv = freeArg' mv
+mkFreeArg WithoutHelp TypeReadInt mv = show <$> (freeArgRead' mv :: Parser Int)
+mkFreeArg WithoutHelp TypeChar mv = (:[]) <$> freeArgChar' mv
+mkFreeArg (WithHelp desc) TypeString mv = freeArg mv desc
+mkFreeArg (WithHelp desc) TypeReadInt mv =
+  show <$> (freeArgRead mv desc :: Parser Int)
+mkFreeArg (WithHelp desc) TypeChar mv = (:[]) <$> freeArgChar mv desc
 
 
-data FreeArgExampleBuilder = FreeArgExample FreeArgMaker Free
+data FreeArgExampleBuilder
+  = FreeArgExample HelpChoice String FreeValue
   deriving (Show, Generic)
 
 buildFreeArgExample :: FreeArgExampleBuilder -> Example String
-buildFreeArgExample (FreeArgExample maker (Free x)) = Example
-  { parser = mkFreeArg maker
+buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
+  = Example
+  { parser = mkFreeArg help (valueType val) metavar
   , inputs = [x]
   , result = x
   , consumes = freeArgs
   }
+  where
+    x = formatValue val
 
 instance Arbitrary FreeArgExampleBuilder where
-  arbitrary = FreeArgExample <$> arbitrary <*> arbitrary
+  arbitrary = FreeArgExample <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 
@@ -373,11 +398,11 @@ prop_freeArg_Skips builder y =
   where
     ex = buildFreeArgExample builder
 
-prop_freeArg_Empty maker =
-  isLeft $ runParser (mkFreeArg maker) []
+prop_freeArg_Empty help valueType metavar =
+  isLeft $ runParser (mkFreeArg help valueType metavar) []
 
-prop_freeArg_NotMatches maker a =
-  isLeft $ runParser (mkFreeArg maker) ['-':a]
+prop_freeArg_NotMatches help valueType metavar a =
+  isLeft $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
 
 -- | Represents a choice between a parser with help (e.g. 'param') or without
@@ -424,7 +449,6 @@ formatValue :: Value -> String
 formatValue (ValueString s) = s
 formatValue (ValueReadInt i) = show i
 formatValue (ValueChar c) = [c]
-
 
 instance Arbitrary Value where
   arbitrary = oneof
