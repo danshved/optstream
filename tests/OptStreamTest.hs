@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric #-}  -- TODO: remove from here.
 module Main where
 
 import Data.Either
 import Data.List
-import GHC.Generics
+import GHC.Generics  -- TODO: remove from here.
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
@@ -61,89 +61,15 @@ tests =
     ]
   ]
 
--- | Represents an arbitrary legal option form.
-newtype Legal = Legal { unLegal :: OptionForm }
-  deriving Show
-
-instance Arbitrary Legal where
-  arbitrary = oneof
-    [ do c <- arbitrary `suchThat` (/= '-')
-         return $ Legal ['-', c]
-    , do s <- arbitrary `suchThat` (/= "")
-         return $ Legal ('-':'-':s)
-    ]
-
-  shrink (Legal ('-':'-':s)) = [Legal ('-':'-':s') | s' <- shrink s, s' /= ""]
-    ++ [Legal ['-', c] | c <- "abc"]
-  shrink (Legal ['-', c]) = [Legal ['-', c'] | c' <- shrink c, c' /= '-']
-  shrink _ = []
-
--- | Represents an arbitrary list of legal option forms (possibly empty).
-newtype Legals = Legals { unLegals :: [OptionForm] }
-  deriving Show
-
-instance Arbitrary Legals where
-  arbitrary = Legals . map unLegal <$> arbitrary
-  shrink (Legals ss) = map Legals $ shrinkList (map unLegal . shrink . Legal) ss
-
-
--- TODO: hide Legal and Legals from the constructor below to make Show output
--- more readable.
-
--- | Represents a set of legal option forms with one of them selected.
-data Forms = Forms Legals Legal Legals
-  deriving (Show, Generic)
-
-allForms :: Forms -> [OptionForm]
-allForms (Forms (Legals as) (Legal b) (Legals cs)) = as ++ [b] ++ cs
-
-chosenForm :: Forms -> OptionForm
-chosenForm (Forms _ (Legal x) _) = x
-
-instance Arbitrary Forms where
-  arbitrary = Forms <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
-
--- | Represents an arbitrary character other than '-'.
-newtype NotDash = NotDash { unNotDash :: Char }
-  deriving Show
-
-instance Arbitrary NotDash where
-  arbitrary = NotDash <$> arbitrary `suchThat` (/= '-')
-  shrink (NotDash c) = [NotDash c' | c' <- shrink c, c' /= '-']
-
--- | Represents an arbitrary free argument.
-newtype Free = Free { unFree :: String }
-  deriving Show
-
-instance Arbitrary Free where
-  arbitrary = Free <$> arbitrary `suchThat` isFree
-  shrink (Free s) = [Free s' | s' <- shrink s, isFree s']
-
-isFree :: String -> Bool
-isFree ('-':_) = False
-isFree _ = True
-
 -- Helper parser that collects all the arguments that it gets.
 args :: Parser [String]
 args = many (anyArg' "ARG")
 
--- | An example of a parse that should succeed.
-data Example a = Example
-  { parser :: Parser a
-    -- ^ Parser under test.
-  , inputs :: [String]
-    -- ^ Example sequence of input arguments that the parser should
-    -- successfully consume.
-  , result :: a
-    -- ^ The value that the parser should produce.
-  , consumes :: ArgLanguage
-    -- ^ The set of all strings the parser is supposed to be willing to
-    -- consume. The parser should skip any string not belonging to this set.
-  }
 
--- * Tests for 'flag' and 'flag''.
 
+-- * Tests for @flag*@
+
+-- TOODO: get rid, move mk* to Helpers.
 -- | Represents a choice between 'flag' and 'flag''.
 data FlagMaker
   = Flag'
@@ -224,77 +150,7 @@ prop_flagSep_NotMatchesBundle maker cs =
 
 
 
--- * Tests for 'param' and co.
-
-mkParam :: HelpChoice -> ValueType -> [OptionForm] -> String -> Parser String
-mkParam WithoutHelp TypeString opts metavar = param' opts metavar
-mkParam WithoutHelp TypeReadInt opts metavar =
-  show <$> (paramRead' opts metavar :: Parser Int)
-mkParam WithoutHelp TypeChar opts metavar = (:[]) <$> paramChar' opts metavar
-mkParam (WithHelp desc) TypeString opts metavar = param opts metavar desc
-mkParam (WithHelp desc) TypeReadInt opts metavar =
-  show <$> (paramRead opts metavar desc :: Parser Int)
-mkParam (WithHelp desc) TypeChar opts metavar =
-  (:[]) <$> paramChar opts metavar desc
-
--- TODO: introduce helpers like Forms, but separate for short and long selected
--- form.
-
--- | Represents an example where a specific @param*@ parser should match a
--- specific block of arguments.
-data ParamExampleBuilder
-  = ParamExample HelpChoice Forms String Value
-  | ParamShortExample HelpChoice Legals NotDash Legals String NonEmptyValue
-  | ParamLongExample HelpChoice Legals (NonEmptyList Char) Legals String Value
-  deriving (Show, Generic)
-
-buildParamExample :: ParamExampleBuilder -> Example String
-buildParamExample (ParamExample help fs metavar val)
-  = Example
-  { parser = mkParam help (valueType val) (allForms fs) metavar
-  , inputs = [chosenForm fs, x]
-  , result = x
-  , consumes = mconcat . map withPrefix $ allForms fs
-  }
-  where
-    x = formatValue val
-buildParamExample
-  (ParamShortExample help (Legals as) (NotDash b) (Legals cs) metavar (NonEmptyValue val))
-  = Example
-  { parser = mkParam help (valueType val) forms metavar
-  , inputs = ['-':b:x]
-  , result = x
-  , consumes = mconcat $ map withPrefix forms
-  }
-  where
-    forms = as ++ [['-', b]] ++ cs
-    x = formatValue val
-buildParamExample
-  (ParamLongExample help (Legals as) (NonEmpty b) (Legals cs) metavar val)
-  = Example
-  { parser = mkParam help (valueType val) forms metavar
-  , inputs = ["--" ++ b ++ "=" ++ x]
-  , result = x
-  , consumes = mconcat $ map withPrefix forms
-  }
-  where
-    forms = as ++ ["--" ++ b] ++ cs
-    x = formatValue val
-
-instance Arbitrary ParamExampleBuilder where
-  arbitrary = oneof
-    [ ParamExample
-        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-    , ParamShortExample
-        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-        <*> arbitrary <*> arbitrary
-    , ParamLongExample
-        <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-        <*> arbitrary <*> arbitrary
-    ]
-
-  shrink = genericShrink
-
+-- * Tests for @param*@
 
 prop_param_Matches builder =
   runParser (parser ex) (inputs ex) == Right (result ex)
@@ -330,63 +186,8 @@ prop_param_NotMatches help valueType metavar fs c d =
     parser = mkParam help valueType forms metavar
 
 
--- * Tests for 'freeArg' and co.
 
-newtype NonEmptyValue = NonEmptyValue { unNonEmptyValue :: Value }
-  deriving Show
-
-instance Arbitrary NonEmptyValue where
-  arbitrary = NonEmptyValue
-    <$> (arbitrary `suchThat` (not . null . formatValue))
-
-  shrink (NonEmptyValue x) =
-    [ NonEmptyValue x'
-    | x' <- shrink x
-    , not . null $ formatValue x'
-    ]
-
-newtype FreeValue = FreeValue { unFreeValue :: Value }
-  deriving Show
-
-instance Arbitrary FreeValue where
-  arbitrary = FreeValue <$> (arbitrary `suchThat` (isFree . formatValue))
-
-  -- TODO: introduce a helper for such shrinks.
-  shrink (FreeValue x) =
-    [ FreeValue x'
-    | x' <- shrink x
-    , isFree $ formatValue x'
-    ]
-
-mkFreeArg :: HelpChoice -> ValueType -> String -> Parser String
-mkFreeArg WithoutHelp TypeString mv = freeArg' mv
-mkFreeArg WithoutHelp TypeReadInt mv = show <$> (freeArgRead' mv :: Parser Int)
-mkFreeArg WithoutHelp TypeChar mv = (:[]) <$> freeArgChar' mv
-mkFreeArg (WithHelp desc) TypeString mv = freeArg mv desc
-mkFreeArg (WithHelp desc) TypeReadInt mv =
-  show <$> (freeArgRead mv desc :: Parser Int)
-mkFreeArg (WithHelp desc) TypeChar mv = (:[]) <$> freeArgChar mv desc
-
-
-data FreeArgExampleBuilder
-  = FreeArgExample HelpChoice String FreeValue
-  deriving (Show, Generic)
-
-buildFreeArgExample :: FreeArgExampleBuilder -> Example String
-buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
-  = Example
-  { parser = mkFreeArg help (valueType val) metavar
-  , inputs = [x]
-  , result = x
-  , consumes = freeArgs
-  }
-  where
-    x = formatValue val
-
-instance Arbitrary FreeArgExampleBuilder where
-  arbitrary = FreeArgExample <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
-
+-- * Tests for @freeArg*@
 
 prop_freeArg_Matches builder =
   runParser (parser ex) (inputs ex) == Right (result ex)
@@ -411,92 +212,8 @@ prop_freeArg_NotMatches help valueType metavar a =
   isLeft $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
 
--- | Represents a choice between a parser with help (e.g. 'param') or without
--- help (e.g. 'param'').
-data HelpChoice
-  = WithoutHelp
-  | WithHelp String
-  deriving (Show, Generic)
 
-instance Arbitrary HelpChoice where
-  arbitrary = oneof [pure WithoutHelp, WithHelp <$> arbitrary]
-
-  shrink WithoutHelp = []
-  shrink x@(WithHelp _) = WithoutHelp:genericShrink x
-
-
--- | Represents a choice between e.g. 'param', 'paramRead', and 'paramChar'.
-data ValueType
-  = TypeString
-  | TypeReadInt
-  | TypeChar
-  deriving (Show, Generic)
-
-instance Arbitrary ValueType where
-  arbitrary = elements [TypeString, TypeReadInt, TypeChar]
-
-  shrink TypeString = []
-  shrink _ = [TypeString]
-
-
--- | Represents a test value to be parsed with 'param', 'freeArg', or 'next'.
-data Value
-  = ValueString String
-  | ValueReadInt Int
-  | ValueChar Char
-  deriving (Show, Generic)
-
-valueType :: Value -> ValueType
-valueType (ValueString _) = TypeString
-valueType (ValueReadInt _) = TypeReadInt
-valueType (ValueChar _) = TypeChar
-
-formatValue :: Value -> String
-formatValue (ValueString s) = s
-formatValue (ValueReadInt i) = show i
-formatValue (ValueChar c) = [c]
-
-instance Arbitrary Value where
-  arbitrary = oneof
-    [ ValueString <$> arbitrary
-    , ValueReadInt <$> arbitrary
-    , ValueChar <$> arbitrary
-    ]
-
-  shrink x@(ValueString _) = genericShrink x
-  shrink x = ValueString (formatValue x):genericShrink x
-
-
-mkMultiParam :: HelpChoice -> [OptionForm] -> Follower a -> Parser a
-mkMultiParam WithoutHelp opts f = multiParam' opts f
-mkMultiParam (WithHelp desc) opts f = multiParam opts f desc
-
-mkNext :: ValueType -> String -> Follower String
-mkNext TypeString metavar = next metavar
-mkNext TypeReadInt metavar = show <$> (nextRead metavar :: Follower Int)
-mkNext TypeChar metavar = (:[]) <$> nextChar metavar
-
-
-data MultiParamExampleBuilder
-  = MultiParamExample HelpChoice Forms [(String, Value)]
-  deriving (Show, Generic)
-
-buildMultiParamExample :: MultiParamExampleBuilder -> Example [String]
-buildMultiParamExample (MultiParamExample helpChoice fs pairs) = Example
-  { parser = mkMultiParam helpChoice (allForms fs) $ traverse toNext pairs
-  , inputs = chosenForm fs:xs
-  , result = xs
-  , consumes = mconcat . map singleton $ allForms fs
-  }
-  where
-    toNext (metavar, val) = mkNext (valueType val) metavar
-    xs = map (formatValue . snd) pairs
-
-instance Arbitrary MultiParamExampleBuilder where
-  arbitrary =
-    MultiParamExample <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
-
+-- * Tests for @multiParam*@
 
 prop_multiParam_Matches builder =
   runParser (parser ex) (inputs ex) == Right (result ex)
@@ -537,7 +254,7 @@ prop_multiParam_NotMatches maker (Legal a) (Legals bs) ms c cs =
     f :: Follower [String]
     f = traverse next ms
 
--- TODO: test *Read and *Char as well.
+
 -- TODO: Use Forms instead of Legals where possible.
 -- TODO: improve distribution of arbitrary argument strings.
 -- TODO: test that defaults for all atomic parsers can be added with <|> orElse.
