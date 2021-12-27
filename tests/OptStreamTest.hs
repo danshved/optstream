@@ -69,84 +69,61 @@ args = many (anyArg' "ARG")
 
 -- * Tests for @flag*@
 
--- TOODO: get rid, move mk* to Helpers.
--- | Represents a choice between 'flag' and 'flag''.
-data FlagMaker
-  = Flag'
-  | Flag String
-  deriving (Show, Generic)
+prop_flag_Matches help fs =
+  runParser (mkFlag help $ allForms fs) [chosenForm fs] == Right ()
 
-mkFlag :: FlagMaker -> [OptionForm] -> Parser ()
-mkFlag Flag' opts = flag' opts
-mkFlag (Flag desc) opts = flag opts desc
+prop_flag_Finishes help fs xs =
+  runParser (mkFlag help (allForms fs) *> args) (chosenForm fs:xs) == Right xs
 
-mkFlagSep :: FlagMaker -> [OptionForm] -> Parser ()
-mkFlagSep Flag' opts = flagSep' opts
-mkFlagSep (Flag desc) opts = flagSep opts desc
-
-
-instance Arbitrary FlagMaker where
-  arbitrary = oneof [pure Flag', Flag <$> arbitrary]
-
-  shrink Flag' = []
-  shrink m@(Flag _)= Flag':genericShrink m
-
-
-prop_flag_Matches maker fs =
-  runParser (mkFlag maker $ allForms fs) [chosenForm fs] == Right ()
-
-prop_flag_Finishes maker fs xs =
-  runParser (mkFlag maker (allForms fs) *> args) (chosenForm fs:xs) == Right xs
-
-prop_flag_Skips maker fs x =
+prop_flag_Skips help fs x =
   not (x `elem` forms) ==>
-  runParser (mkFlag maker forms #> args) [x, chosenForm fs] == Right [x]
+  runParser (mkFlag help forms #> args) [x, chosenForm fs] == Right [x]
   where
     forms = allForms fs
 
-prop_flag_Empty maker fs =
-  isLeft $ runParser (mkFlag maker $ allForms fs) []
+prop_flag_Empty help fs =
+  isLeft $ runParser (mkFlag help $ allForms fs) []
 
-prop_flag_NotMatches maker fs x =
+prop_flag_NotMatches help fs x =
   not (x `elem` forms) ==>
-  isLeft $ runParser (mkFlag maker forms) [x]
+  isLeft $ runParser (mkFlag help forms) [x]
   where
     forms = allForms fs
 
-prop_flag_MatchesBundle maker (NonEmpty cs) =
+prop_flag_MatchesBundle help (NonEmpty cs) =
   runParser p ['-':chars] == Right [() | c <- chars]
   where
-    p = sequenceA [mkFlag maker [['-', c]] | c <- chars]
+    p = sequenceA [mkFlag help [['-', c]] | c <- chars]
     chars = [c | NotDash c <- cs]
 
 
-prop_flagSep_Matches maker fs =
-  runParser (mkFlagSep maker $ allForms fs) [chosenForm fs] == Right ()
+prop_flagSep_Matches help fs =
+  runParser (mkFlagSep help $ allForms fs) [chosenForm fs] == Right ()
 
-prop_flagSep_Finishes maker fs xs =
-  runParser (mkFlagSep maker (allForms fs) *> args) (chosenForm fs:xs)
+prop_flagSep_Finishes help fs xs =
+  runParser (mkFlagSep help (allForms fs) *> args) (chosenForm fs:xs)
     == Right xs
 
-prop_flagSep_Skips maker fs x =
+prop_flagSep_Skips help fs x =
   not (x `elem` forms) ==>
-  runParser (mkFlagSep maker forms #> args) [x, chosenForm fs] == Right [x]
+  runParser (mkFlagSep help forms #> args) [x, chosenForm fs] == Right [x]
   where
     forms = allForms fs
 
-prop_flagSep_Empty maker fs =
-  isLeft $ runParser (mkFlagSep maker $ allForms fs) []
+prop_flagSep_Empty help fs =
+  isLeft $ runParser (mkFlagSep help $ allForms fs) []
 
-prop_flagSep_NotMatches maker fs x =
+prop_flagSep_NotMatches help fs x =
   not (x `elem` forms) ==>
-  isLeft $ runParser (mkFlagSep maker forms) [x]
+  isLeft $ runParser (mkFlagSep help forms) [x]
   where
     forms = allForms fs
 
-prop_flagSep_NotMatchesBundle maker cs =
+prop_flagSep_NotMatchesBundle help cs =
   length cs >= 2 ==>
   isLeft $ runParser p ['-':map unNotDash cs]
   where
-    p = sequenceA [mkFlagSep maker [['-', c]] | NotDash c <- cs]
+    p = sequenceA [mkFlagSep help [['-', c]] | NotDash c <- cs]
 
 
 

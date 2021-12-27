@@ -189,6 +189,18 @@ instance Arbitrary ValueType where
 -- | Synonym for better readability.
 type Metavar = String
 
+
+-- TODO: unite mkFlag and mkFlagSep.
+
+-- | Makes an arbitrary @flag*@ parser for testing.
+mkFlag :: HelpChoice -> [OptionForm] -> Parser ()
+mkFlag WithoutHelp opts = flag' opts
+mkFlag (WithHelp desc) opts = flag opts desc
+
+mkFlagSep :: HelpChoice -> [OptionForm] -> Parser ()
+mkFlagSep WithoutHelp opts = flagSep' opts
+mkFlagSep (WithHelp desc) opts = flagSep opts desc
+
 -- | Makes an arbitrary @param*@ parser for testing.
 mkParam :: HelpChoice -> ValueType -> [OptionForm] -> Metavar -> Parser String
 mkParam WithoutHelp TypeString opts mv = param' opts mv
@@ -225,9 +237,6 @@ mkNext TypeChar mv = (:[]) <$> nextChar mv
 
 
 -- * Producing command line examples for testing
-
-
--- ** Value
 
 
 -- TODO: Remove if unused (may be superseded by FreeValue).
@@ -305,7 +314,7 @@ instance Arbitrary FreeValue where
     ]
 
 
--- ** Example
+-- ** Full parse examples
 
 
 -- | An example of a parse that should succeed.
@@ -406,13 +415,11 @@ buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
 
 -- | Represents an example where a @multiParam*@ parser should match a specific
 -- block of command line arguments.
-data MultiParamExample
-  = MultiParamExample HelpChoice Forms [(Metavar, Value)]
+data MultiParamExample = MultiParamExample HelpChoice Forms [(Metavar, Value)]
   deriving (Show, Generic)
 
 instance Arbitrary MultiParamExample where
-  arbitrary =
-    MultiParamExample <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = MultiParamExample <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 buildMultiParamExample :: MultiParamExample -> Example [String]
