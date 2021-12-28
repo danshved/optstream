@@ -133,10 +133,10 @@ prop_flag_NoHelp bundling fs =
   getHelp (mkFlag WithoutHelp bundling (allForms fs)) === mempty
 
 prop_flag_EmptyForms help bundling =
-  throwsError $ runParser (mkFlag help bundling []) []
+  throwsError . toRaw $ mkFlag help bundling []
 
 prop_flag_IllegalForm help bundling (ChosenIllegal fs) =
-  throwsError $ runParser (mkFlag help bundling (allForms fs)) []
+  throwsError . toRaw $ mkFlag help bundling (allForms fs)
 
 
 
@@ -187,10 +187,10 @@ prop_param_NoHelp valueType metavar fs =
   getHelp (mkParam WithoutHelp valueType (allForms fs) metavar) === mempty
 
 prop_param_EmptyForms help valueType metavar =
-  throwsError $ runParser (mkParam help valueType [] metavar) []
+  throwsError . toRaw $  mkParam help valueType [] metavar
 
 prop_param_IllegalForm help valueType (ChosenIllegal fs) metavar =
-  throwsError $ runParser (mkParam help valueType (allForms fs) metavar) []
+  throwsError . toRaw $  mkParam help valueType (allForms fs) metavar
 
 
 
@@ -284,14 +284,10 @@ prop_multiParam_NoHelp fs pairs =
     parser = mkMultiParam WithoutHelp (allForms fs) (mkFollower pairs)
 
 prop_multiParam_EmptyForms help pairs =
-  throwsError $ runParser parser []
-  where
-    parser = (mkMultiParam help [] (mkFollower pairs))
+  throwsError . toRaw $ mkMultiParam help [] (mkFollower pairs)
 
 prop_multiParam_IllegalForm help (ChosenIllegal fs) pairs =
-  throwsError $ runParser parser []
-  where
-    parser = (mkMultiParam help (allForms fs) (mkFollower pairs))
+  throwsError . toRaw $ mkMultiParam help (allForms fs) (mkFollower pairs)
 
 
 
