@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Options.OptStream.Test.Helpers where
 
+import Control.Exception
 import Data.Either
 import Data.List hiding (union, intersect, null)
 import Data.Maybe
@@ -111,6 +112,12 @@ isRight' x = counterexample (kind x ++ showsPrec 11 x "") (isRight x)
     kind (Left _) = "isLeft "
     kind (Right _) = "isRight "
 
+throwsError :: a -> Property
+throwsError a = ioProperty $ isErrorCall <$> try (evaluate a)
+  where
+    isErrorCall :: Either ErrorCall a -> Bool
+    isErrorCall = isLeft
+
 
 
 -- * Producing atomic parsers for testing
@@ -154,6 +161,11 @@ shrinkLegal s@('-':c:[])
   | c /= '-' = shrinkShort s
 shrinkLegal _ = []
 
+arbitraryIllegal :: Gen OptionForm
+arbitraryIllegal = arbitrary `suchThat` (not . isLegalOptionForm)
+
+shrinkIllegal :: OptionForm -> [OptionForm]
+shrinkIllegal s = filter (not . isLegalOptionForm) $ shrink s
 
 -- | Represents a list of legal option forms with one of them selected.
 data Forms = Forms [OptionForm] OptionForm [OptionForm]
@@ -202,6 +214,17 @@ newtype FormsL = ChosenLong Forms
 instance Arbitrary FormsL where
   arbitrary = ChosenLong <$> arbitraryForms arbitraryLong
   shrink (ChosenLong fs) = [ChosenLong fs' | fs' <- shrinkForms shrinkLong fs]
+
+
+-- | Represents a list of option forms where all of them are legal except one.
+-- The illegal form is also the selected one.
+newtype FormsI = ChosenIllegal Forms
+  deriving Show
+
+instance Arbitrary FormsI where
+  arbitrary = ChosenIllegal <$> arbitraryForms arbitraryIllegal
+  shrink (ChosenIllegal fs) =
+    [ChosenIllegal fs' | fs' <- shrinkForms shrinkIllegal fs]
 
 
 -- | Represents a choice between a parser with help (e.g. 'param') or without

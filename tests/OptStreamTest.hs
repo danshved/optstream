@@ -27,6 +27,8 @@ tests =
     , testProperty "NotMatchesBundle" prop_flag_NotMatchesBundle
     , testProperty "Help"             prop_flag_Help
     , testProperty "NoHelp"           prop_flag_NoHelp
+    , testProperty "EmptyForms"       prop_flag_EmptyForms
+    , testProperty "IllegalForm"      prop_flag_IllegalForm
     ]
 
   , testGroup "param"
@@ -39,6 +41,8 @@ tests =
     , testProperty "MissingArg"    prop_param_MissingArg
     , testProperty "Help"          prop_param_Help
     , testProperty "NoHelp"        prop_param_NoHelp
+    , testProperty "EmptyForms"    prop_param_EmptyForms
+    , testProperty "IllegalForm"   prop_param_IllegalForm
     ]
 
   , testGroup "freeArg"
@@ -53,15 +57,17 @@ tests =
     ]
 
   , testGroup "multiParam"
-    [ testProperty "Matches"    prop_multiParam_Matches
-    , testProperty "Finishes"   prop_multiParam_Finishes
-    , testProperty "Skips"      prop_multiParam_Skips
-    , testProperty "Empty"      prop_multiParam_Empty
-    , testProperty "OrElse"     prop_multiParam_OrElse
-    , testProperty "NotMatches" prop_multiParam_NotMatches
-    , testProperty "NotEnough"  prop_multiParam_NotEnough
-    , testProperty "Help"       prop_multiParam_Help
-    , testProperty "NoHelp"     prop_multiParam_NoHelp
+    [ testProperty "Matches"     prop_multiParam_Matches
+    , testProperty "Finishes"    prop_multiParam_Finishes
+    , testProperty "Skips"       prop_multiParam_Skips
+    , testProperty "Empty"       prop_multiParam_Empty
+    , testProperty "OrElse"      prop_multiParam_OrElse
+    , testProperty "NotMatches"  prop_multiParam_NotMatches
+    , testProperty "NotEnough"   prop_multiParam_NotEnough
+    , testProperty "Help"        prop_multiParam_Help
+    , testProperty "NoHelp"      prop_multiParam_NoHelp
+    , testProperty "EmptyForms"  prop_multiParam_EmptyForms
+    , testProperty "IllegalForm" prop_multiParam_IllegalForm
     ]
   ]
 
@@ -126,7 +132,12 @@ prop_flag_Help desc bundling fs =
 prop_flag_NoHelp bundling fs =
   getHelp (mkFlag WithoutHelp bundling (allForms fs)) === mempty
 
--- TODO: check that empty form lists and illegal forms lead to failure.
+prop_flag_EmptyForms help bundling =
+  throwsError $ runParser (mkFlag help bundling []) []
+
+prop_flag_IllegalForm help bundling (ChosenIllegal fs) =
+  throwsError $ runParser (mkFlag help bundling (allForms fs)) []
+
 
 
 -- * Tests for @param*@
@@ -175,6 +186,14 @@ prop_param_Help desc valueType metavar fs =
 prop_param_NoHelp valueType metavar fs =
   getHelp (mkParam WithoutHelp valueType (allForms fs) metavar) === mempty
 
+prop_param_EmptyForms help valueType metavar =
+  throwsError $ runParser (mkParam help valueType [] metavar) []
+
+prop_param_IllegalForm help valueType (ChosenIllegal fs) metavar =
+  throwsError $ runParser (mkParam help valueType (allForms fs) metavar) []
+
+
+
 -- * Tests for @freeArg*@
 
 prop_freeArg_Matches builder =
@@ -209,6 +228,8 @@ prop_freeArg_Help desc valueType metavar =
 
 prop_freeArg_NoHelp valueType metavar =
   getHelp (mkFreeArg WithoutHelp valueType metavar) === mempty
+
+
 
 -- * Tests for @multiParam*@
 
@@ -261,6 +282,17 @@ prop_multiParam_NoHelp fs pairs =
   getHelp parser === mempty
   where
     parser = mkMultiParam WithoutHelp (allForms fs) (mkFollower pairs)
+
+prop_multiParam_EmptyForms help pairs =
+  throwsError $ runParser parser []
+  where
+    parser = (mkMultiParam help [] (mkFollower pairs))
+
+prop_multiParam_IllegalForm help (ChosenIllegal fs) pairs =
+  throwsError $ runParser parser []
+  where
+    parser = (mkMultiParam help (allForms fs) (mkFollower pairs))
+
 
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
