@@ -301,6 +301,38 @@ mkFollower = traverse (uncurry mkNext)
 -- * Producing command line examples for testing
 
 
+-- | Arbitrary string interesting for command line testing.
+arbitraryArg :: Gen String
+arbitraryArg = oneof
+  [ arbitrary
+  , ("-" ++) <$> arbitrary
+  , ("--" ++) <$> arbitrary
+  ]
+
+-- | Arbitrary character interesting for command line testing.
+arbitraryChar :: Gen Char
+arbitraryChar = oneof [arbitrary, pure '-']
+
+
+-- | Represents an arbitrary command line argument. Can be any string, but the
+-- distribution is skewed to produce more examples starting with @-@ and @--@.
+newtype AnyArg = AnyArg String
+  deriving (Show, Generic)
+
+instance Arbitrary AnyArg where
+  arbitrary = AnyArg <$> arbitraryArg
+  shrink = genericShrink
+
+
+-- | Represents an arbitrary list of command line arguments like 'AnyArg'.
+newtype AnyArgs = AnyArgs [String]
+  deriving (Show, Generic)
+
+instance Arbitrary AnyArgs where
+  arbitrary = AnyArgs <$> listOf arbitraryArg
+  shrink = genericShrink
+
+
 -- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or
 -- 'next'.
 data Value
@@ -321,9 +353,9 @@ formatValue (ValueChar c) = [c]
 
 instance Arbitrary Value where
   arbitrary = oneof
-    [ ValueString <$> arbitrary
+    [ ValueString <$> arbitraryArg
     , ValueReadInt <$> arbitrary
-    , ValueChar <$> arbitrary
+    , ValueChar <$> arbitraryChar
     ]
 
   shrink x@(ValueString _) = genericShrink x

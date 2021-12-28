@@ -69,12 +69,12 @@ prop_flag_Matches help bundling fs =
   where
     parser = mkFlag help bundling (allForms fs)
 
-prop_flag_Finishes help bundling fs x =
+prop_flag_Finishes help bundling fs (AnyArg x) =
   runParser (parser *> args) [chosenForm fs, x] === Right [x]
   where
     parser = mkFlag help bundling (allForms fs)
 
-prop_flag_Skips help bundling fs x =
+prop_flag_Skips help bundling fs (AnyArg x) =
   not (x `elem` forms) ==>
   runParser (parser #> args) [x, chosenForm fs] === Right [x]
   where
@@ -91,7 +91,7 @@ prop_flag_OrElse help bundling fs =
   where
     parser = mkFlag help bundling (allForms fs)
 
-prop_flag_NotMatches help bundling fs x =
+prop_flag_NotMatches help bundling fs (AnyArg x) =
   not (x `elem` forms) ==>
   isLeft' $ runParser parser [x]
   where
@@ -120,12 +120,12 @@ prop_param_Matches builder =
   where
     ex = buildParamExample builder
 
-prop_param_Finishes builder y =
+prop_param_Finishes builder (AnyArg y) =
   runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
     ex = buildParamExample builder
 
-prop_param_Skips builder y =
+prop_param_Skips builder (AnyArg y) =
   not (y `member` consumes ex) ==>
   runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
@@ -141,7 +141,7 @@ prop_param_OrElse help valueType metavar fs x =
   where
     parser = mkParam help valueType (allForms fs) metavar
 
-prop_param_NotMatches help valueType metavar fs c d =
+prop_param_NotMatches help valueType metavar fs (AnyArg c) (AnyArg d) =
   not (any (`isPrefixOf` c) forms) ==>
   isLeft' $ runParser (parser *> args) [c, d]
   where
@@ -162,12 +162,12 @@ prop_freeArg_Matches builder =
   where
     ex = buildFreeArgExample builder
 
-prop_freeArg_Finishes builder y =
+prop_freeArg_Finishes builder (AnyArg y) =
   runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
     ex = buildFreeArgExample builder
 
-prop_freeArg_Skips builder y =
+prop_freeArg_Skips builder (AnyArg y) =
   not (y `member` consumes ex) ==>
   runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
@@ -193,12 +193,12 @@ prop_multiParam_Matches builder =
   where
     ex = buildMultiParamExample builder
 
-prop_multiParam_Finishes builder y =
+prop_multiParam_Finishes builder (AnyArg y) =
   runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
     ex = buildMultiParamExample builder
 
-prop_multiParam_Skips builder y =
+prop_multiParam_Skips builder (AnyArg y) =
   not (y `member` consumes ex) ==>
   runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
@@ -214,7 +214,7 @@ prop_multiParam_OrElse help fs pairs x =
   where
     parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
-prop_multiParam_NotMatches help fs pairs c cs =
+prop_multiParam_NotMatches help fs pairs (AnyArg c) (AnyArgs cs) =
   not (c `elem` forms) ==>
   isLeft' $ runParser (parser *> args) (c:cs)
   where
@@ -228,8 +228,6 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
     pairs' = [(valueType val, mv) | (mv, val) <- matches] ++ pairs
     parser = mkMultiParam help (allForms fs) (mkFollower pairs')
 
-
--- TODO: improve distribution of arbitrary argument strings.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
