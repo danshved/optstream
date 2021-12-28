@@ -1,5 +1,7 @@
 module Main where
 
+import Control.Applicative hiding (some, many, optional)
+import Data.Functor
 import Data.List
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
@@ -13,38 +15,42 @@ main = defaultMain tests
 
 tests :: [Test]
 tests =
-  [ testGroup "flag*"
+  [ testGroup "flag"
     [ testProperty "Matches"          prop_flag_Matches
     , testProperty "Finishes"         prop_flag_Finishes
     , testProperty "Skips"            prop_flag_Skips
     , testProperty "Empty"            prop_flag_Empty
+    , testProperty "OrElse"           prop_flag_OrElse
     , testProperty "NotMatches"       prop_flag_NotMatches
     , testProperty "MatchesBundle"    prop_flag_MatchesBundle
     , testProperty "NotMatchesBundle" prop_flag_NotMatchesBundle
     ]
 
-  , testGroup "param*"
+  , testGroup "param"
     [ testProperty "Matches"       prop_param_Matches
     , testProperty "Finishes"      prop_param_Finishes
     , testProperty "Skips"         prop_param_Skips
     , testProperty "Empty"         prop_param_Empty
+    , testProperty "OrElse"        prop_param_OrElse
     , testProperty "NotMatches"    prop_param_NotMatches
     , testProperty "MissingArg"    prop_param_MissingArg
     ]
 
-  , testGroup "freeArg*"
+  , testGroup "freeArg"
     [ testProperty "Matches"    prop_freeArg_Matches
     , testProperty "Finishes"   prop_freeArg_Finishes
     , testProperty "Skips"      prop_freeArg_Skips
     , testProperty "Empty"      prop_freeArg_Empty
+    , testProperty "OrElse"     prop_freeArg_OrElse
     , testProperty "NotMatches" prop_freeArg_NotMatches
     ]
 
-  , testGroup "multiParam*"
+  , testGroup "multiParam"
     [ testProperty "Matches"    prop_multiParam_Matches
     , testProperty "Finishes"   prop_multiParam_Finishes
     , testProperty "Skips"      prop_multiParam_Skips
     , testProperty "Empty"      prop_multiParam_Empty
+    , testProperty "OrElse"     prop_multiParam_OrElse
     , testProperty "NotMatches" prop_multiParam_NotMatches
     , testProperty "NotEnough"  prop_multiParam_NotEnough
     ]
@@ -77,6 +83,11 @@ prop_flag_Skips help bundling fs x =
 
 prop_flag_Empty help bundling fs =
   isLeft' $ runParser parser []
+  where
+    parser = mkFlag help bundling (allForms fs)
+
+prop_flag_OrElse help bundling fs =
+  runParser (parser $> True <|> orElse False) [] === Right False
   where
     parser = mkFlag help bundling (allForms fs)
 
@@ -125,6 +136,11 @@ prop_param_Empty help valueType metavar fs =
   where
     parser = mkParam help valueType (allForms fs) metavar
 
+prop_param_OrElse help valueType metavar fs x =
+  runParser (parser <|> orElse x) [] === Right x
+  where
+    parser = mkParam help valueType (allForms fs) metavar
+
 prop_param_NotMatches help valueType metavar fs c d =
   not (any (`isPrefixOf` c) forms) ==>
   isLeft' $ runParser (parser *> args) [c, d]
@@ -160,6 +176,11 @@ prop_freeArg_Skips builder y =
 prop_freeArg_Empty help valueType metavar =
   isLeft' $ runParser (mkFreeArg help valueType metavar) []
 
+prop_freeArg_OrElse help valueType metavar x =
+  runParser (parser <|> orElse x) [] === Right x
+  where
+    parser = mkFreeArg help valueType metavar
+
 prop_freeArg_NotMatches help valueType metavar a =
   isLeft' $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
@@ -188,6 +209,11 @@ prop_multiParam_Empty help fs pairs =
   where
     parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
+prop_multiParam_OrElse help fs pairs x =
+  runParser (parser <|> orElse x) [] === Right x
+  where
+    parser = mkMultiParam help (allForms fs) (mkFollower pairs)
+
 prop_multiParam_NotMatches help fs pairs c cs =
   not (c `elem` forms) ==>
   isLeft' $ runParser (parser *> args) (c:cs)
@@ -204,8 +230,6 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
 
 
 -- TODO: improve distribution of arbitrary argument strings.
--- TODO: test that defaults for all atomic parsers can be added with <|>
--- orElse.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
