@@ -11,6 +11,7 @@ from the outside.
 module Options.OptStream.Internal where
 
 import Data.Foldable
+import Data.Function
 import Data.List
 import Data.Maybe
 import System.Exit
@@ -39,6 +40,9 @@ instance Foldable List where
 instance Show a => Show (List a) where
   showsPrec d l = showParen (10 < d) $
     showString "fromList " . showsPrec 11 (toList l)
+
+instance Eq a => Eq (List a) where
+  (==) = (==) `on` toList
 
 
 -- * Removing duplicates

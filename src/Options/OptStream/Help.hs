@@ -76,7 +76,7 @@ data Help = Help
   , helpHeader  :: List String
   , helpFooter  :: List String
   }
-  deriving Show
+  deriving (Eq, Show)
 
 instance Semigroup Help where
   Help x y z <> Help x' y' z' = Help (x <> x') (y <> y') (z <> z')

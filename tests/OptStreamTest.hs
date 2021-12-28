@@ -121,14 +121,10 @@ prop_flag_NotMatchesBundle help cs =
     parser = sequenceA [mkFlag help WithoutBundling [['-', c]] | c <- chars]
 
 prop_flag_Help desc bundling fs =
-  formatHelp (getHelp parser) =/= ""
-  where
-    parser = mkFlag (WithHelp desc) bundling (allForms fs)
+  getHelp (mkFlag (WithHelp desc) bundling (allForms fs)) =/= mempty
 
 prop_flag_NoHelp bundling fs =
-  formatHelp (getHelp parser) === ""
-  where
-    parser = mkFlag WithoutHelp bundling (allForms fs)
+  getHelp (mkFlag WithoutHelp bundling (allForms fs)) === mempty
 
 -- TODO: check that empty form lists and illegal forms lead to failure.
 
@@ -174,14 +170,10 @@ prop_param_MissingArg help valueType metavar fs =
     parser = mkParam help valueType (allForms fs) metavar
 
 prop_param_Help desc valueType metavar fs =
-  formatHelp (getHelp parser) =/= ""
-  where
-    parser = mkParam (WithHelp desc) valueType (allForms fs) metavar
+  getHelp (mkParam (WithHelp desc) valueType (allForms fs) metavar) =/= mempty
 
 prop_param_NoHelp valueType metavar fs =
-  formatHelp (getHelp parser) === ""
-  where
-    parser = mkParam WithoutHelp valueType (allForms fs) metavar
+  getHelp (mkParam WithoutHelp valueType (allForms fs) metavar) === mempty
 
 -- * Tests for @freeArg*@
 
@@ -213,14 +205,10 @@ prop_freeArg_NotMatches help valueType metavar a =
   isLeft' $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
 prop_freeArg_Help desc valueType metavar =
-  formatHelp (getHelp parser) =/= ""
-  where
-    parser = mkFreeArg (WithHelp desc) valueType metavar
+  getHelp (mkFreeArg (WithHelp desc) valueType metavar) =/= mempty
 
 prop_freeArg_NoHelp valueType metavar =
-  formatHelp (getHelp parser) === ""
-  where
-    parser = mkFreeArg WithoutHelp valueType metavar
+  getHelp (mkFreeArg WithoutHelp valueType metavar) === mempty
 
 -- * Tests for @multiParam*@
 
@@ -265,12 +253,12 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
     parser = mkMultiParam help (allForms fs) (mkFollower pairs')
 
 prop_multiParam_Help desc fs pairs =
-  formatHelp (getHelp parser) =/= ""
+  getHelp parser =/= mempty
   where
     parser = mkMultiParam (WithHelp desc) (allForms fs) (mkFollower pairs)
 
 prop_multiParam_NoHelp fs pairs =
-  formatHelp (getHelp parser) === ""
+  getHelp parser === mempty
   where
     parser = mkMultiParam WithoutHelp (allForms fs) (mkFollower pairs)
 
