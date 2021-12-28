@@ -8,6 +8,7 @@ import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 
 import Options.OptStream
+import Options.OptStream.Help
 import Options.OptStream.Test.Helpers hiding (null)
 
 main :: IO ()
@@ -24,6 +25,8 @@ tests =
     , testProperty "NotMatches"       prop_flag_NotMatches
     , testProperty "MatchesBundle"    prop_flag_MatchesBundle
     , testProperty "NotMatchesBundle" prop_flag_NotMatchesBundle
+    , testProperty "Help"             prop_flag_Help
+    , testProperty "NoHelp"           prop_flag_NoHelp
     ]
 
   , testGroup "param"
@@ -34,6 +37,8 @@ tests =
     , testProperty "OrElse"        prop_param_OrElse
     , testProperty "NotMatches"    prop_param_NotMatches
     , testProperty "MissingArg"    prop_param_MissingArg
+    , testProperty "Help"          prop_param_Help
+    , testProperty "NoHelp"        prop_param_NoHelp
     ]
 
   , testGroup "freeArg"
@@ -43,6 +48,8 @@ tests =
     , testProperty "Empty"      prop_freeArg_Empty
     , testProperty "OrElse"     prop_freeArg_OrElse
     , testProperty "NotMatches" prop_freeArg_NotMatches
+    , testProperty "Help"       prop_freeArg_Help
+    , testProperty "NoHelp"     prop_freeArg_NoHelp
     ]
 
   , testGroup "multiParam"
@@ -53,6 +60,8 @@ tests =
     , testProperty "OrElse"     prop_multiParam_OrElse
     , testProperty "NotMatches" prop_multiParam_NotMatches
     , testProperty "NotEnough"  prop_multiParam_NotEnough
+    , testProperty "Help"       prop_multiParam_Help
+    , testProperty "NoHelp"     prop_multiParam_NoHelp
     ]
   ]
 
@@ -111,6 +120,17 @@ prop_flag_NotMatchesBundle help cs =
     chars = [c | NotDash c <- cs]
     parser = sequenceA [mkFlag help WithoutBundling [['-', c]] | c <- chars]
 
+prop_flag_Help desc bundling fs =
+  formatHelp (getHelp parser) =/= ""
+  where
+    parser = mkFlag (WithHelp desc) bundling (allForms fs)
+
+prop_flag_NoHelp bundling fs =
+  formatHelp (getHelp parser) === ""
+  where
+    parser = mkFlag WithoutHelp bundling (allForms fs)
+
+-- TODO: check that empty form lists and illegal forms lead to failure.
 
 
 -- * Tests for @param*@
@@ -153,7 +173,15 @@ prop_param_MissingArg help valueType metavar fs =
   where
     parser = mkParam help valueType (allForms fs) metavar
 
+prop_param_Help desc valueType metavar fs =
+  formatHelp (getHelp parser) =/= ""
+  where
+    parser = mkParam (WithHelp desc) valueType (allForms fs) metavar
 
+prop_param_NoHelp valueType metavar fs =
+  formatHelp (getHelp parser) === ""
+  where
+    parser = mkParam WithoutHelp valueType (allForms fs) metavar
 
 -- * Tests for @freeArg*@
 
@@ -184,7 +212,15 @@ prop_freeArg_OrElse help valueType metavar x =
 prop_freeArg_NotMatches help valueType metavar a =
   isLeft' $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
+prop_freeArg_Help desc valueType metavar =
+  formatHelp (getHelp parser) =/= ""
+  where
+    parser = mkFreeArg (WithHelp desc) valueType metavar
 
+prop_freeArg_NoHelp valueType metavar =
+  formatHelp (getHelp parser) === ""
+  where
+    parser = mkFreeArg WithoutHelp valueType metavar
 
 -- * Tests for @multiParam*@
 
@@ -227,6 +263,16 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
     ds = [formatValue val | (_, val) <- matches]
     pairs' = [(valueType val, mv) | (mv, val) <- matches] ++ pairs
     parser = mkMultiParam help (allForms fs) (mkFollower pairs')
+
+prop_multiParam_Help desc fs pairs =
+  formatHelp (getHelp parser) =/= ""
+  where
+    parser = mkMultiParam (WithHelp desc) (allForms fs) (mkFollower pairs)
+
+prop_multiParam_NoHelp fs pairs =
+  formatHelp (getHelp parser) === ""
+  where
+    parser = mkMultiParam WithoutHelp (allForms fs) (mkFollower pairs)
 
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
