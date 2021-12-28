@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Options.OptStream.Test.Helpers where
 
+import Data.Either
 import Data.List hiding (union, intersect, null)
 import Data.Maybe
 import GHC.Generics
@@ -93,6 +94,22 @@ intersectChunks (WithPrefix "") FreeArgs = Just FreeArgs
 intersectChunks (WithPrefix ('-':_)) FreeArgs = Nothing
 intersectChunks (WithPrefix p) FreeArgs = Just $ WithPrefix p
 intersectChunks f@FreeArgs p@(WithPrefix _) = intersectChunks p f
+
+
+
+-- * QuickCheck helpers
+
+isLeft' :: (Show a, Show b) => Either a b -> Property
+isLeft' x = counterexample (kind x ++ showsPrec 11 x "") (isLeft x)
+  where
+    kind (Left _) = "isLeft "
+    kind (Right _) = "isRight "
+
+isRight' :: (Show a, Show b) => Either a b -> Property
+isRight' x = counterexample (kind x ++ showsPrec 11 x "") (isRight x)
+  where
+    kind (Left _) = "isLeft "
+    kind (Right _) = "isRight "
 
 
 

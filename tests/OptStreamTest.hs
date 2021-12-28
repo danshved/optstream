@@ -1,6 +1,5 @@
 module Main where
 
-import Data.Either
 import Data.List
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
@@ -77,13 +76,13 @@ prop_flag_Skips help bundling fs x =
     parser = mkFlag help bundling forms
 
 prop_flag_Empty help bundling fs =
-  isLeft $ runParser parser []
+  isLeft' $ runParser parser []
   where
     parser = mkFlag help bundling (allForms fs)
 
 prop_flag_NotMatches help bundling fs x =
   not (x `elem` forms) ==>
-  isLeft $ runParser parser [x]
+  isLeft' $ runParser parser [x]
   where
     forms = allForms fs
     parser = mkFlag help bundling forms
@@ -96,7 +95,7 @@ prop_flag_MatchesBundle help (NonEmpty cs) =
 
 prop_flag_NotMatchesBundle help cs =
   length chars >= 2 ==>
-  isLeft $ runParser parser ['-':chars]
+  isLeft' $ runParser parser ['-':chars]
   where
     chars = [c | NotDash c <- cs]
     parser = sequenceA [mkFlag help WithoutBundling [['-', c]] | c <- chars]
@@ -122,19 +121,19 @@ prop_param_Skips builder y =
     ex = buildParamExample builder
 
 prop_param_Empty help valueType metavar fs =
-  isLeft $ runParser parser []
+  isLeft' $ runParser parser []
   where
     parser = mkParam help valueType (allForms fs) metavar
 
 prop_param_NotMatches help valueType metavar fs c d =
   not (any (`isPrefixOf` c) forms) ==>
-  isLeft $ runParser (parser *> args) [c, d]
+  isLeft' $ runParser (parser *> args) [c, d]
   where
     forms = allForms fs
     parser = mkParam help valueType forms metavar
 
 prop_param_MissingArg help valueType metavar fs =
-  isLeft $ runParser parser [chosenForm fs]
+  isLeft' $ runParser parser [chosenForm fs]
   where
     parser = mkParam help valueType (allForms fs) metavar
 
@@ -159,10 +158,10 @@ prop_freeArg_Skips builder y =
     ex = buildFreeArgExample builder
 
 prop_freeArg_Empty help valueType metavar =
-  isLeft $ runParser (mkFreeArg help valueType metavar) []
+  isLeft' $ runParser (mkFreeArg help valueType metavar) []
 
 prop_freeArg_NotMatches help valueType metavar a =
-  isLeft $ runParser (mkFreeArg help valueType metavar) ['-':a]
+  isLeft' $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
 
 
@@ -185,19 +184,19 @@ prop_multiParam_Skips builder y =
     ex = buildMultiParamExample builder
 
 prop_multiParam_Empty help fs pairs =
-  isLeft $ runParser parser []
+  isLeft' $ runParser parser []
   where
     parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
 prop_multiParam_NotMatches help fs pairs c cs =
   not (c `elem` forms) ==>
-  isLeft $ runParser (parser *> args) (c:cs)
+  isLeft' $ runParser (parser *> args) (c:cs)
   where
     forms = allForms fs
     parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
 prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
-  isLeft $ runParser parser (chosenForm fs:ds)
+  isLeft' $ runParser parser (chosenForm fs:ds)
   where
     ds = [formatValue val | (_, val) <- matches]
     pairs' = [(valueType val, mv) | (mv, val) <- matches] ++ pairs
@@ -205,8 +204,8 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
 
 
 -- TODO: improve distribution of arbitrary argument strings.
--- TODO: test that defaults for all atomic parsers can be added with <|> orElse.
--- TODO: Use 'counterexample' to improve readibility of isLeft properties.
+-- TODO: test that defaults for all atomic parsers can be added with <|>
+-- orElse.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also
