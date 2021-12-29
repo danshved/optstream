@@ -259,7 +259,7 @@ class Alternative p => SubstreamParser p where
   -- skipped it.
   (<|->) :: p a -> p a -> p a
 
-  -- | Skips all input tokens except EOF, then returns '()'. See also:
+  -- | Skips all input tokens except EOF, then returns @()@. See also:
   -- 'orElse'.
   eof :: p ()
 

@@ -277,6 +277,9 @@ data ShortsError
   = SEUnexpectedChar Char
   | SEDoneError Context DoneError
 
+-- TODO: fix error message when the very first character is skipped.
+-- Instead of "unexpected char" in should be that the entire argument is
+-- unexpected. (Maybe easier to do this at call site).
 runShorts :: String
           -> Context
           -> RawParser a
@@ -290,6 +293,7 @@ runShorts arg = doRun where
     Just pa' -> doRun (CtxShort arg c) pa' cs
     Nothing -> Left $ SEUnexpectedChar c
 
+-- TODO: drop the requirement that the characters are not '-'.
 getShorts :: String -> Maybe [Char]
 getShorts ('-':cs@(_:_:_)) | all (/= '-') cs = Just cs
 getShorts _ = Nothing

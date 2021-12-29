@@ -369,6 +369,15 @@ instance Arbitrary AnyArgs where
   shrink = genericShrink
 
 
+-- | Represents an arbitrary character interesting for command line testing.
+newtype AnyChar = AnyChar Char
+  deriving (Show, Generic)
+
+instance Arbitrary AnyChar where
+  arbitrary = AnyChar <$> arbitraryChar
+  shrink = genericShrink
+
+
 -- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or
 -- 'next'.
 data Value
