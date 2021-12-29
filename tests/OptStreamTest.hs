@@ -70,6 +70,15 @@ tests =
     , testProperty "IllegalForm" prop_multiParam_IllegalForm
     ]
 
+  , testGroup "match"
+    [ testProperty "Matches"    prop_match_Matches
+    , testProperty "Finishes"   prop_match_Finishes
+    , testProperty "Skips"      prop_match_Skips
+    , testProperty "Empty"      prop_match_Empty
+    , testProperty "OrElse"     prop_match_OrElse
+    , testProperty "NotMatches" prop_match_NotMatches
+    ]
+
   , testGroup "withHelp"
     [ testProperty "MatchesMain" prop_withHelp_MatchesMain
     , testProperty "MatchesHelp" prop_withHelp_MatchesHelp
@@ -331,6 +340,28 @@ prop_multiParam_EmptyForms help pairs =
 prop_multiParam_IllegalForm help (ChosenIllegal fs) pairs =
   throwsError . toRaw $ mkMultiParam help (allForms fs) (mkFollower pairs)
 
+
+
+-- * Tests for match*
+
+prop_match_Matches (AnyArg s) =
+  runParser (match s) [s] === Right s
+
+prop_match_Finishes (AnyArg s) (AnyArg y) =
+  runParser (match s *> args) [s, y] === Right [y]
+
+prop_match_Skips (AnyArg s) (AnyArg y) =
+  runParser (match s #> args) [y, s] === Right [y]
+
+prop_match_Empty (AnyArg s) =
+  isLeft' $ runParser (match s) []
+
+prop_match_OrElse (AnyArg s) x =
+  runParser (match s <|> orElse x) [] === Right x
+
+prop_match_NotMatches (AnyArg s) (AnyArg x) =
+  x /= s ==>
+  isLeft' $ runParser (match s) [x]
 
 
 -- * Tests for utilities
