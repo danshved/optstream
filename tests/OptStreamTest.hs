@@ -93,6 +93,18 @@ tests =
     , testProperty "MatchesHelp" prop_withSubHelp'_MatchesHelp
     , testProperty "ClearsrHelp" prop_withSubHelp'_ClearsHelp
     ]
+
+  , testGroup "withVersion"
+    [ testProperty "MatchesMain" prop_withVersion_MatchesMain
+    , testProperty "MatchesHelp" prop_withVersion_MatchesVersion
+    , testProperty "AddsHelp"    prop_withVersion_AddsHelp
+    ]
+
+  , testGroup "withVersion'"
+    [ testProperty "MatchesMain" prop_withVersion'_MatchesMain
+    , testProperty "MatchesHelp" prop_withVersion'_MatchesVersion
+    , testProperty "AddsNoHelp"  prop_withVersion'_AddsNoHelp
+    ]
   ]
 
 -- | Helper parser that collects all the arguments that it gets.
@@ -386,6 +398,42 @@ prop_withSubHelp'_MatchesHelp builder =
 
 prop_withSubHelp'_ClearsHelp builder =
   getHelp (withSubHelp' $ parser ex) === mempty
+  where
+    ex = buildGenericExample builder
+
+
+prop_withVersion_MatchesMain s builder =
+  runParser (withVersion s p) (inputs ex) === (Right . Right $ result ex)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withVersion_MatchesVersion s builder =
+  not ("--version" `member` consumes ex) ==>
+  runParser (withVersion s $ parser ex) ["--version"] === (Right $ Left s)
+  where
+    ex = buildGenericExample builder
+
+prop_withVersion_AddsHelp s builder =
+  getHelp (withVersion s $ parser ex) =/= getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_withVersion'_MatchesMain s builder =
+  runParser (withVersion' s p) (inputs ex) === (Right . Right $ result ex)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withVersion'_MatchesVersion s builder =
+  not ("--version" `member` consumes ex) ==>
+  runParser (withVersion' s $ parser ex) ["--version"] === (Right $ Left s)
+  where
+    ex = buildGenericExample builder
+
+prop_withVersion'_AddsNoHelp s builder =
+  getHelp (withVersion' s $ parser ex) === getHelp (parser ex)
   where
     ex = buildGenericExample builder
 
