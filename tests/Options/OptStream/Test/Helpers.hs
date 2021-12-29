@@ -495,6 +495,16 @@ instance Arbitrary ParamExample where
     ParamExample help fs mv val:genericShrink e
   shrink e = genericShrink e
 
+peHelp :: ParamExample -> HelpChoice
+peHelp (ParamExample help _ _ _) = help
+peHelp (ParamShortExample help _ _ _) = help
+peHelp (ParamLongExample help _ _ _) = help
+
+peForms :: ParamExample -> Forms
+peForms (ParamExample _ fs _ _) = fs
+peForms (ParamShortExample _ (ChosenShort fs) _ _) = fs
+peForms (ParamLongExample _ (ChosenLong fs) _ _) = fs
+
 buildParamExample :: ParamExample -> Example String
 buildParamExample (ParamExample help fs metavar val)
   = Example
@@ -563,19 +573,27 @@ buildMultiParamExample (MultiParamExample helpChoice fs pairs)
 -- | Represents an example of a successful parse with any atomic parser without
 -- 'orElse'.
 data AtomicExample
-  = AtomicFlag FlagExample
+  = AtomicMatch AnyArg
+  | AtomicFlag FlagExample
   | AtomicParam ParamExample
   | AtomicFreeArg FreeArgExample
   | AtomicMultiParam MultiParamExample
   deriving (Show, Generic)
 
+atomicToMatch :: AtomicExample -> [AnyArg]
+atomicToMatch (AtomicFlag (FlagExample _ _ fs)) =
+  [AnyArg $ chosenForm fs]
+atomicToMatch (AtomicParam p) =
+  [AnyArg . chosenForm $ peForms p]
+atomicToMatch (AtomicFreeArg (FreeArgExample _ _ (FreeValue val))) =
+  [AnyArg $ formatValue val]
+atomicToMatch (AtomicMultiParam (MultiParamExample _ fs _)) =
+  [AnyArg $ chosenForm fs]
+atomicToMatch _ = []
+
 atomicToFlag :: AtomicExample -> [FlagExample]
-atomicToFlag (AtomicParam (ParamExample help fs _ _)) =
-  [FlagExample help WithoutBundling fs]
-atomicToFlag (AtomicParam (ParamShortExample help (ChosenShort fs) _ _)) =
-  [FlagExample help WithoutBundling fs]
-atomicToFlag (AtomicParam (ParamLongExample help (ChosenLong fs) _ _)) =
-  [FlagExample help WithoutBundling fs]
+atomicToFlag (AtomicParam p) =
+  [FlagExample (peHelp p) WithoutBundling (peForms p)]
 atomicToFlag (AtomicMultiParam (MultiParamExample help fs _)) =
   [FlagExample help WithoutBundling fs]
 atomicToFlag _ = []
@@ -594,7 +612,8 @@ instance Arbitrary AtomicExample where
     , AtomicMultiParam <$> arbitrary
     ]
 
-  shrink e = (map AtomicFlag $ atomicToFlag e)
+  shrink e = (map AtomicMatch $ atomicToMatch e)
+    ++ (map AtomicFlag $ atomicToFlag e)
     ++ (map AtomicParam $ atomicToParam e)
     ++ genericShrink e
 
