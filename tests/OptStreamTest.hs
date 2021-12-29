@@ -79,22 +79,21 @@ args = many (anyArg' "ARG")
 
 -- * Tests for @flag*@
 
-prop_flag_Matches help bundling fs =
-  runParser parser [chosenForm fs] === Right ()
+prop_flag_Matches builder =
+  runParser (parser ex) (inputs ex) === Right (result ex)
   where
-    parser = mkFlag help bundling (allForms fs)
+    ex = buildFlagExample builder
 
-prop_flag_Finishes help bundling fs (AnyArg x) =
-  runParser (parser *> args) [chosenForm fs, x] === Right [x]
+prop_flag_Finishes builder (AnyArg y) =
+  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
   where
-    parser = mkFlag help bundling (allForms fs)
+    ex = buildFlagExample builder
 
-prop_flag_Skips help bundling fs (AnyArg x) =
-  not (x `elem` forms) ==>
-  runParser (parser #> args) [x, chosenForm fs] === Right [x]
+prop_flag_Skips builder (AnyArg y) =
+  not (y `member` consumes ex) ==>
+  runParser (parser ex #> args) (y:inputs ex) === Right [y]
   where
-    forms = allForms fs
-    parser = mkFlag help bundling forms
+    ex = buildFlagExample builder
 
 prop_flag_Empty help bundling fs =
   isLeft' $ runParser parser []

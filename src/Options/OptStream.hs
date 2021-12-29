@@ -55,7 +55,7 @@ Note that in the code above:
   * We run the parser using 'parseArgsWithHelp', which takes care of handling
   errors and printing @--help@.
 
-==== __Demo outputs:__
+==== Demo outputs:
 
 >>> ./demo -s foo -i 42 -b bar
 String parameter   : "foo"
@@ -611,7 +611,7 @@ addParamHelp func opts metavar desc =
   paramHelp opts metavar desc $ func opts metavar
 
 -- | A /parameter/ is an option that has one string argument, e.g.
--- @--input=FILENAME@ or @-n NAME@.
+-- @--input=FILENAME@ or @-i FILENAME@.
 --
 -- The first argument to 'param' should list all the forms of the parameter,
 -- both short and long. For every short form @-f@ the parser will accept:
@@ -771,8 +771,8 @@ addFreeArgHelp func' metavar desc = freeArgHelp metavar desc $ func' metavar
 --
 -- >>> let p = freeArg "FILENAME" "Input file."
 -- >>> runParserIO p ["input.txt"]
---
 -- "input.txt"
+--
 -- >>> runParserIO p [""]
 -- ""
 --

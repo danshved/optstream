@@ -275,6 +275,9 @@ instance Arbitrary Bundling where
 type Metavar = String
 
 
+-- TODO: Reorder params of mk* to more closely resemble underlying functions,
+--       i.e. move HelpChoice to the end.
+
 -- | Makes an arbitrary @flag*@ parser for testing.
 mkFlag :: HelpChoice -> Bundling -> [OptionForm] -> Parser ()
 mkFlag WithoutHelp WithoutBundling opts = flagSep' opts
@@ -439,6 +442,25 @@ data Example a = Example
   }
 
 
+-- | Represents an example where a specific @flag*@ parser should match a
+-- specific block of arguments.
+data FlagExample = FlagExample HelpChoice Bundling Forms
+  deriving (Show, Generic)
+
+instance Arbitrary FlagExample where
+  arbitrary = FlagExample <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+buildFlagExample :: FlagExample -> Example ()
+buildFlagExample (FlagExample help bundling fs)
+  = Example
+  { parser = mkFlag help bundling (allForms fs)
+  , inputs = [chosenForm fs]
+  , result = ()
+  , consumes = mconcat . map singleton $ allForms fs
+  }
+
+
 -- | Represents an example where a specific @param*@ parser should match a
 -- specific block of arguments.
 data ParamExample
@@ -523,3 +545,5 @@ buildMultiParamExample (MultiParamExample helpChoice fs pairs)
   where
     toNext (metavar, val) = mkNext (valueType val) metavar
     xs = map (formatValue . snd) pairs
+
+
