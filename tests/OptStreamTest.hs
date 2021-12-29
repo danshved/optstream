@@ -105,6 +105,13 @@ tests =
     , testProperty "MatchesHelp" prop_withVersion'_MatchesVersion
     , testProperty "AddsNoHelp"  prop_withVersion'_AddsNoHelp
     ]
+
+  , testGroup "beforeDashes"
+    [ testProperty "MatchesMain" prop_beforeDashes_MatchesMain
+    , testProperty "Matches"     prop_beforeDashes_Matches
+    , testProperty "Finishes"    prop_beforeDashes_Finishes
+    , testProperty "AddsNoHelp"  prop_beforeDashes_AddsNoHelp
+    ]
   ]
 
 -- | Helper parser that collects all the arguments that it gets.
@@ -434,6 +441,32 @@ prop_withVersion'_MatchesVersion s builder =
 
 prop_withVersion'_AddsNoHelp s builder =
   getHelp (withVersion' s $ parser ex) === getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_beforeDashes_MatchesMain builder =
+  runParser (beforeDashes $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+-- TODO: make this fail (when p consumes "--"). Right now it doesn't fail
+-- because GenericExample is too limited, all its parsers finish without
+-- waiting for EOF.
+prop_beforeDashes_Matches builder =
+  runParser (beforeDashes p) (inputs ex ++ ["--"]) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_beforeDashes_Finishes builder (AnyArgs ys) =
+  runParser (beforeDashes p *> args) (inputs ex ++ ["--"] ++ ys) === Right ys
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_beforeDashes_AddsNoHelp builder =
+  getHelp (beforeDashes $ parser ex) === getHelp (parser ex)
   where
     ex = buildGenericExample builder
 
