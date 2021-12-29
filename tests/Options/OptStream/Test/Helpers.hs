@@ -455,6 +455,35 @@ instance Functor Example where
   fmap f (Example p i r c) = Example (fmap f p) i (f r) c
 
 
+buildMatchExample :: String -> Example String
+buildMatchExample s = Example
+  { parser = match s
+  , inputs = [s]
+  , result = s
+  , consumes = singleton s
+  }
+
+
+-- | Represents an example of a successful parse with 'matchAndFollow'.
+data MAFExample = MAFExample String [(Metavar, Value)]
+  deriving (Show, Generic)
+
+instance Arbitrary MAFExample where
+  arbitrary = MAFExample <$> arbitraryArg <*> arbitrary
+  shrink = genericShrink
+
+buildMAFExample :: MAFExample -> Example [String]
+buildMAFExample (MAFExample s pairs)
+  = Example
+  { parser = matchAndFollow s follower
+  , inputs = s:xs
+  , result = xs
+  , consumes = singleton s
+  }
+  where
+    (follower, xs) = mkFollowerExample pairs
+
+
 -- | Represents an example where a specific @flag*@ parser should match a
 -- specific block of arguments.
 data FlagExample = FlagExample HelpChoice Bundling Forms
@@ -504,6 +533,16 @@ peForms :: ParamExample -> Forms
 peForms (ParamExample _ fs _ _) = fs
 peForms (ParamShortExample _ (ChosenShort fs) _ _) = fs
 peForms (ParamLongExample _ (ChosenLong fs) _ _) = fs
+
+peMetavar :: ParamExample -> Metavar
+peMetavar (ParamExample _ _ metavar _) = metavar
+peMetavar (ParamShortExample _ _ metavar _) = metavar
+peMetavar (ParamLongExample _ _ metavar _) = metavar
+
+peValue :: ParamExample -> Value
+peValue (ParamExample _ _ _ val) = val
+peValue (ParamShortExample _ _ _ (NonEmptyValue val)) = val
+peValue (ParamLongExample _ _ _ val) = val
 
 buildParamExample :: ParamExample -> Example String
 buildParamExample (ParamExample help fs metavar val)
@@ -557,23 +596,28 @@ instance Arbitrary MultiParamExample where
   arbitrary = MultiParamExample <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
+mkFollowerExample :: [(Metavar, Value)] -> (Follower [String], [String])
+mkFollowerExample pairs = (f, xs) where
+  f = mkFollower [(valueType val, metavar) | (metavar, val) <- pairs]
+  xs = [formatValue val | (_, val) <- pairs]
+
 buildMultiParamExample :: MultiParamExample -> Example [String]
 buildMultiParamExample (MultiParamExample helpChoice fs pairs)
   = Example
-  { parser = mkMultiParam helpChoice (allForms fs) $ traverse toNext pairs
+  { parser = mkMultiParam helpChoice (allForms fs) f
   , inputs = chosenForm fs:xs
   , result = xs
   , consumes = mconcat . map singleton $ allForms fs
   }
   where
-    toNext (metavar, val) = mkNext (valueType val) metavar
-    xs = map (formatValue . snd) pairs
+    (f, xs) = mkFollowerExample pairs
 
 
 -- | Represents an example of a successful parse with any atomic parser without
 -- 'orElse'.
 data AtomicExample
   = AtomicMatch AnyArg
+  | AtomicMAF MAFExample
   | AtomicFlag FlagExample
   | AtomicParam ParamExample
   | AtomicFreeArg FreeArgExample
@@ -581,6 +625,8 @@ data AtomicExample
   deriving (Show, Generic)
 
 atomicToMatch :: AtomicExample -> [AnyArg]
+atomicToMatch (AtomicMAF (MAFExample s _)) =
+  [AnyArg s]
 atomicToMatch (AtomicFlag (FlagExample _ _ fs)) =
   [AnyArg $ chosenForm fs]
 atomicToMatch (AtomicParam p) =
@@ -590,6 +636,13 @@ atomicToMatch (AtomicFreeArg (FreeArgExample _ _ (FreeValue val))) =
 atomicToMatch (AtomicMultiParam (MultiParamExample _ fs _)) =
   [AnyArg $ chosenForm fs]
 atomicToMatch _ = []
+
+atomicToMAF :: AtomicExample -> [MAFExample]
+atomicToMAF (AtomicParam p) =
+  [MAFExample (chosenForm $ peForms p) [(peMetavar p, peValue p)]]
+atomicToMAF (AtomicMultiParam (MultiParamExample _ fs pairs)) =
+  [MAFExample (chosenForm fs) pairs]
+atomicToMAF _ = []
 
 atomicToFlag :: AtomicExample -> [FlagExample]
 atomicToFlag (AtomicParam p) =
@@ -606,18 +659,23 @@ atomicToParam _ = []
 
 instance Arbitrary AtomicExample where
   arbitrary = oneof
-    [ AtomicFlag <$> arbitrary
+    [ AtomicMatch <$> arbitrary
+    , AtomicMAF <$> arbitrary
+    , AtomicFlag <$> arbitrary
     , AtomicParam <$> arbitrary
     , AtomicFreeArg <$> arbitrary
     , AtomicMultiParam <$> arbitrary
     ]
 
   shrink e = (map AtomicMatch $ atomicToMatch e)
+    ++ (map AtomicMAF $ atomicToMAF e)
     ++ (map AtomicFlag $ atomicToFlag e)
     ++ (map AtomicParam $ atomicToParam e)
     ++ genericShrink e
 
 buildAtomicExample :: AtomicExample -> Example String
+buildAtomicExample (AtomicMatch (AnyArg s)) = buildMatchExample s
+buildAtomicExample (AtomicMAF x) = concat <$> buildMAFExample x
 buildAtomicExample (AtomicFlag x) = "" <$ buildFlagExample x
 buildAtomicExample (AtomicParam x) = buildParamExample x
 buildAtomicExample (AtomicFreeArg x) = buildFreeArgExample x

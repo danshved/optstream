@@ -79,6 +79,16 @@ tests =
     , testProperty "NotMatches" prop_match_NotMatches
     ]
 
+  , testGroup "matchAndFollow"
+    [ testProperty "Matches"    prop_matchAndFollow_Matches
+    , testProperty "Finishes"   prop_matchAndFollow_Finishes
+    , testProperty "Skips"      prop_matchAndFollow_Skips
+    , testProperty "Empty"      prop_matchAndFollow_Empty
+    , testProperty "OrElse"     prop_matchAndFollow_OrElse
+    , testProperty "NotMatches" prop_matchAndFollow_NotMatches
+    , testProperty "NotEnough"  prop_matchAndFollow_NotEnough
+    ]
+
   , testGroup "withHelp"
     [ testProperty "MatchesMain" prop_withHelp_MatchesMain
     , testProperty "MatchesHelp" prop_withHelp_MatchesHelp
@@ -342,7 +352,7 @@ prop_multiParam_IllegalForm help (ChosenIllegal fs) pairs =
 
 
 
--- * Tests for match*
+-- * Tests for match
 
 prop_match_Matches (AnyArg s) =
   runParser (match s) [s] === Right s
@@ -362,6 +372,47 @@ prop_match_OrElse (AnyArg s) x =
 prop_match_NotMatches (AnyArg s) (AnyArg x) =
   x /= s ==>
   isLeft' $ runParser (match s) [x]
+
+
+
+-- * Tests for matchAndFollow
+
+
+prop_matchAndFollow_Matches builder =
+  runParser (parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildMAFExample builder
+
+prop_matchAndFollow_Finishes builder (AnyArg y) =
+  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
+  where
+    ex = buildMAFExample builder
+
+prop_matchAndFollow_Skips builder (AnyArg y) =
+  not (y `member` consumes ex) ==>
+  runParser (parser ex #> args) (y:inputs ex) === Right [y]
+  where
+    ex = buildMAFExample builder
+
+prop_matchAndFollow_Empty (AnyArg s) pairs =
+  isLeft' $ runParser (matchAndFollow s $ mkFollower pairs) []
+
+prop_matchAndFollow_OrElse (AnyArg s) pairs x =
+  runParser (parser <|> orElse x) [] === Right x
+  where
+    parser = matchAndFollow s $ mkFollower pairs
+
+prop_matchAndFollow_NotMatches (AnyArg s) pairs (AnyArg s') (AnyArgs xs) =
+  s' /= s ==>
+  isLeft' $ runParser (parser *> args) (s':xs)
+  where
+    parser = matchAndFollow s $ mkFollower pairs
+
+prop_matchAndFollow_NotEnough (AnyArg s) matches (NonEmpty pairs) =
+  isLeft' $ runParser (matchAndFollow s $ mkFollower pairs') (s:ds)
+  where
+    ds = [formatValue val | (_, val) <- matches]
+    pairs' = [(valueType val, mv) | (mv, val) <- matches] ++ pairs
 
 
 -- * Tests for utilities
@@ -501,6 +552,8 @@ prop_beforeDashes_AddsNoHelp builder =
   where
     ex = buildGenericExample builder
 
+
+-- TODO: Test parse failures for *Char and *Read.
 
 -- TODO: Test that withHelp et al. can interrupt a parse in the middle.
 
