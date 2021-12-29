@@ -69,6 +69,30 @@ tests =
     , testProperty "EmptyForms"  prop_multiParam_EmptyForms
     , testProperty "IllegalForm" prop_multiParam_IllegalForm
     ]
+
+  , testGroup "withHelp"
+    [ testProperty "MatchesMain" prop_withHelp_MatchesMain
+    , testProperty "MatchesHelp" prop_withHelp_MatchesHelp
+    , testProperty "AddsHelp"    prop_withHelp_AddsHelp
+    ]
+
+  , testGroup "withHelp'"
+    [ testProperty "MatchesMain" prop_withHelp'_MatchesMain
+    , testProperty "MatchesHelp" prop_withHelp'_MatchesHelp
+    , testProperty "AddsNoHelp"  prop_withHelp'_AddsNoHelp
+    ]
+
+  , testGroup "withSubHelp"
+    [ testProperty "MatchesMain" prop_withSubHelp_MatchesMain
+    , testProperty "MatchesHelp" prop_withSubHelp_MatchesHelp
+    , testProperty "ClearsHelp"  prop_withSubHelp_ClearsHelp
+    ]
+
+  , testGroup "withSubHelp'"
+    [ testProperty "MatchesMain" prop_withSubHelp'_MatchesMain
+    , testProperty "MatchesHelp" prop_withSubHelp'_MatchesHelp
+    , testProperty "ClearsrHelp" prop_withSubHelp'_ClearsHelp
+    ]
   ]
 
 -- | Helper parser that collects all the arguments that it gets.
@@ -289,6 +313,84 @@ prop_multiParam_IllegalForm help (ChosenIllegal fs) pairs =
   throwsError . toRaw $ mkMultiParam help (allForms fs) (mkFollower pairs)
 
 
+
+-- * Tests for utilities
+
+prop_withHelp_MatchesMain builder =
+  runParser (withHelp $ parser ex) (inputs ex) === (Right . Right $ result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_withHelp_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  runParser p ["--help"] === (Right . Left $ getHelp p)
+  where
+    ex = buildGenericExample builder
+    p = withHelp $ parser ex
+
+prop_withHelp_AddsHelp builder =
+  getHelp (withHelp $ parser ex) =/= getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_withHelp'_MatchesMain builder =
+  runParser (withHelp' $ parser ex) (inputs ex) === (Right . Right $ result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_withHelp'_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  runParser (withHelp' p) ["--help"] === (Right . Left $ getHelp p)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withHelp'_AddsNoHelp builder =
+  getHelp (withHelp' $ parser ex) === getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_withSubHelp_MatchesMain builder =
+  runParser (withSubHelp p) (inputs ex) === (Right . Right $ result ex)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withSubHelp_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  runParser (withSubHelp p) ["--help"] === (Right . Left . getHelp $ withHelp p)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withSubHelp_ClearsHelp builder =
+  getHelp (withSubHelp $ parser ex) === mempty
+  where
+    ex = buildGenericExample builder
+
+
+prop_withSubHelp'_MatchesMain builder =
+  runParser (withSubHelp' p) (inputs ex) === (Right . Right $ result ex)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withSubHelp'_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  runParser (withSubHelp' p) ["--help"] === (Right . Left $ getHelp p)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withSubHelp'_ClearsHelp builder =
+  getHelp (withSubHelp' $ parser ex) === mempty
+  where
+    ex = buildGenericExample builder
+
+
+-- TODO: Test that withHelp et al. can interrupt a parse in the middle.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with
 --       <#> as long as they have non-intersecting sets of option forms. Also

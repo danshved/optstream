@@ -3,6 +3,7 @@ module Options.OptStream.Test.Helpers where
 
 import Control.Exception
 import Data.Either
+import Data.Functor
 import Data.List hiding (union, intersect, null)
 import Data.Maybe
 import GHC.Generics
@@ -143,7 +144,7 @@ shrinkShort _ = []
 
 arbitraryLong :: Gen OptionForm
 arbitraryLong = do
-  s <- arbitrary `suchThat` (not . P.null)
+  s <- oneof [arbitrary `suchThat` (not . P.null), pure "help", pure "version"]
   return $ '-':'-':s
 
 shrinkLong :: OptionForm -> [OptionForm]
@@ -189,9 +190,17 @@ shrinkForms shrinkChosen (Forms as b cs)
     ++ [Forms as b' cs | b' <- shrinkChosen b]
     ++ [Forms as b cs' | cs' <- shrinkList shrinkLegal cs]
 
+chooseLeft :: Forms -> [Forms]
+chooseLeft (Forms (a:as) _ cs) = [Forms as a cs]
+chooseLeft _ = []
+
+chooseRight :: Forms -> [Forms]
+chooseRight (Forms as _ (c:cs)) = [Forms as c cs]
+chooseRight _ = []
+
 instance Arbitrary Forms where
   arbitrary = arbitraryForms arbitraryLegal
-  shrink = shrinkForms shrinkLegal
+  shrink fs = shrinkForms shrinkLegal fs ++ chooseLeft fs ++ chooseRight fs
 
 
 -- | Represents a list of legal option forms with one of them selected. It is
@@ -326,13 +335,12 @@ mkFollower = traverse (uncurry mkNext)
 
 -- * Producing command line examples for testing
 
-
 -- | Arbitrary string interesting for command line testing.
 arbitraryArg :: Gen String
 arbitraryArg = oneof
   [ arbitrary
   , ("-" ++) <$> arbitrary
-  , ("--" ++) <$> arbitrary
+  , ("--" ++) <$> oneof [arbitrary, pure "help", pure "version"]
   ]
 
 -- | Arbitrary character interesting for command line testing.
@@ -441,6 +449,9 @@ data Example a = Example
     -- to this set.
   }
 
+instance Functor Example where
+  fmap f (Example p i r c) = Example (fmap f p) i (f r) c
+
 
 -- | Represents an example where a specific @flag*@ parser should match a
 -- specific block of arguments.
@@ -546,4 +557,56 @@ buildMultiParamExample (MultiParamExample helpChoice fs pairs)
     toNext (metavar, val) = mkNext (valueType val) metavar
     xs = map (formatValue . snd) pairs
 
+
+-- | Represents an example of a successful parse with any atomic parser without
+-- 'orElse'.
+data AtomicExample
+  = AtomicFlag FlagExample
+  | AtomicParam ParamExample
+  | AtomicFreeArg FreeArgExample
+  | AtomicMultiParam MultiParamExample
+  deriving (Show, Generic)
+
+atomicToFlag :: AtomicExample -> [FlagExample]
+atomicToFlag (AtomicParam (ParamExample help fs _ _)) =
+  [FlagExample help WithoutBundling fs]
+atomicToFlag (AtomicParam (ParamShortExample help (ChosenShort fs) _ _)) =
+  [FlagExample help WithoutBundling fs]
+atomicToFlag (AtomicParam (ParamLongExample help (ChosenLong fs) _ _)) =
+  [FlagExample help WithoutBundling fs]
+atomicToFlag (AtomicMultiParam (MultiParamExample help fs _)) =
+  [FlagExample help WithoutBundling fs]
+atomicToFlag _ = []
+
+atomicToParam :: AtomicExample -> [ParamExample]
+atomicToParam
+  (AtomicMultiParam (MultiParamExample help fs ((metavar, val):_))) =
+  [ParamExample help fs metavar val]
+atomicToParam _ = []
+
+instance Arbitrary AtomicExample where
+  arbitrary = oneof
+    [ AtomicFlag <$> arbitrary
+    , AtomicParam <$> arbitrary
+    , AtomicFreeArg <$> arbitrary
+    , AtomicMultiParam <$> arbitrary
+    ]
+
+  shrink e = (map AtomicFlag $ atomicToFlag e)
+    ++ (map AtomicParam $ atomicToParam e)
+    ++ genericShrink e
+
+buildAtomicExample :: AtomicExample -> Example String
+buildAtomicExample (AtomicFlag x) = "" <$ buildFlagExample x
+buildAtomicExample (AtomicParam x) = buildParamExample x
+buildAtomicExample (AtomicFreeArg x) = buildFreeArgExample x
+buildAtomicExample (AtomicMultiParam x) = concat <$> buildMultiParamExample x
+
+
+-- | Represents a generic 'Parser' for testing, together with an example input
+-- for a successful parse.
+type GenericExample = AtomicExample
+
+buildGenericExample :: GenericExample -> Example String
+buildGenericExample = buildAtomicExample
 
