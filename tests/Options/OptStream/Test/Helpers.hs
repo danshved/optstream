@@ -378,6 +378,15 @@ instance Arbitrary AnyChar where
   shrink = genericShrink
 
 
+-- | Represents an arbitrary list of characters like 'AnyChar'
+newtype AnyChars = AnyChars [Char]
+  deriving (Show, Generic)
+
+instance Arbitrary AnyChars where
+  arbitrary = AnyChars <$> listOf arbitraryChar
+  shrink = genericShrink
+
+
 -- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or
 -- 'next'.
 data Value

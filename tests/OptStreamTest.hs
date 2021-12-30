@@ -435,8 +435,6 @@ prop_matchAndFollow_NotEnough (AnyArg s) matches (NonEmpty pairs) =
 -- * Tests for matchShort
 
 -- TODO: Add matchShort variant to AtomicExample.
--- TODO: Get rid of NotDash in all matchShort cases when bundling of '-' is
---       supported.
 
 prop_matchShort_Matches (AnyChar c) =
   runParser (matchShort c) [['-', c]] === Right c
@@ -447,16 +445,12 @@ prop_matchShort_Finishes (AnyChar c) (AnyArg y) =
 prop_matchShort_Skips (AnyChar c) (AnyArg y) =
   runParser (matchShort c #> args) [y, ['-', c]] === Right [y]
 
-prop_matchShort_FinishesInBundle (NotDash c) cs =
-  runParser (matchShort c *> shorts) ['-':c:chars] === Right chars
-  where
-    chars = [c' | NotDash c' <- cs]
+prop_matchShort_FinishesInBundle (AnyChar c) (AnyChars cs) =
+  runParser (matchShort c *> shorts) ['-':c:cs] === Right cs
 
-prop_matchShort_SkipsInBundle (NotDash c) cs =
-  not (c `elem` chars) ==>
-  runParser (matchShort c #> shorts) [['-'] ++ chars ++ [c]] === Right chars
-  where
-    chars = [c' | NotDash c' <- cs]
+prop_matchShort_SkipsInBundle (AnyChar c) (AnyChars cs) =
+  not (c `elem` cs) ==>
+  runParser (matchShort c #> shorts) [['-'] ++ cs ++ [c]] === Right cs
 
 prop_matchShort_Empty (AnyChar c) =
   isLeft' $ runParser (matchShort c) []
@@ -468,10 +462,9 @@ prop_matchShort_NotMatches (AnyChar c) (AnyChar x) =
   x /= c ==>
   isLeft' $ runParser (matchShort c) [['-', x]]
 
-prop_matchShort_MatchesBundle (NonEmpty cs) =
-  runParser (traverse matchShort chars) ['-':chars] === Right chars
-  where
-    chars = [c | NotDash c <- cs]
+prop_matchShort_MatchesBundle (AnyChars cs) =
+  not (null cs) ==>
+  runParser (traverse matchShort cs) ['-':cs] === Right cs
 
 
 -- * Tests for utilities

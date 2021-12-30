@@ -277,7 +277,6 @@ data ShortsError
   = SEUnexpectedChar Char
   | SEDoneError Context DoneError
 
--- TODO: Drop the requirement that the characters are not '-'.
 runShorts :: String
           -> Context
           -> RawParser a
@@ -318,11 +317,10 @@ runParser = doRun CtxStart where
       Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
       Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
     Nothing -> case s of
-      ('-':cs@(c:_:_)) | all (/= '-') cs && isJust (shortH c) ->
-        case runShorts s ctx pa cs of
-          Right (ctx', pa') -> doRun ctx' pa' ss
-          Left (SEUnexpectedChar c) -> Left $ UnexpectedChar c s
-          Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
+      ('-':cs@(c:_:_)) | isJust (shortH c) -> case runShorts s ctx pa cs of
+        Right (ctx', pa') -> doRun ctx' pa' ss
+        Left (SEUnexpectedChar c) -> Left $ UnexpectedChar c s
+        Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
       _ -> Left $ UnexpectedArg s
 
 
