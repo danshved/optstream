@@ -604,7 +604,6 @@ prop_beforeDashes_AddsNoHelp builder =
 
 
 -- TODO: Test parse failures for *Char and *Read.
-
 -- TODO: Test that withHelp et al. can interrupt a parse in the middle.
 
 -- TODO: (?) test that atomic option parsers can be matched in any order with

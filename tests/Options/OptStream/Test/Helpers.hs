@@ -162,7 +162,7 @@ shrinkLegal s@('-':c:[])
   | c /= '-' = shrinkShort s
 shrinkLegal _ = []
 
--- TODO: improve distribution to include things like '--' or '-abc'.
+-- TODO: improve distribution to include things like '-', '--' or '-abc'.
 arbitraryIllegal :: Gen OptionForm
 arbitraryIllegal = arbitrary `suchThat` (not . isLegalOptionForm)
 
@@ -336,18 +336,26 @@ mkFollower = traverse (uncurry mkNext)
 
 -- * Producing command line examples for testing
 
--- TODO: make 50/50 for starting with '-' vs. another character.
 -- | Arbitrary string interesting for command line testing.
 arbitraryArg :: Gen String
 arbitraryArg = oneof
   [ arbitrary
-  , ("-" ++) <$> arbitrary
-  , ("--" ++) <$> oneof [arbitrary, pure "help", pure "version"]
+  , oneof
+    [ ("-" ++) <$> arbitrary
+    , ("--" ++) <$> oneof
+      [ arbitrary
+      , pure "help"
+      , pure "version"
+      ]
+    ]
   ]
 
 -- | Arbitrary character interesting for command line testing.
 arbitraryChar :: Gen Char
-arbitraryChar = oneof [arbitrary, pure '-']
+arbitraryChar = frequency
+  [ (3, arbitrary)
+  , (1, pure '-')
+  ]
 
 
 -- | Represents an arbitrary command line argument. Can be any string, but the
