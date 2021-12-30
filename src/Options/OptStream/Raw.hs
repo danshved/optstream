@@ -277,9 +277,7 @@ data ShortsError
   = SEUnexpectedChar Char
   | SEDoneError Context DoneError
 
--- TODO: fix error message when the very first character is skipped.
--- Instead of "unexpected char" in should be that the entire argument is
--- unexpected. (Maybe easier to do this at call site).
+-- TODO: Drop the requirement that the characters are not '-'.
 runShorts :: String
           -> Context
           -> RawParser a
@@ -289,14 +287,9 @@ runShorts arg = doRun where
   doRun ctx pa [] = Right (ctx, pa)
   doRun ctx (Done (Left e)) (_:_) = Left $ SEDoneError ctx e
   doRun ctx (Done (Right _)) (c:_) = Left $ SEUnexpectedChar c
-  doRun ctx (Scan _ _ g) (c:cs) = case g c of
+  doRun ctx (Scan _ _ shortH) (c:cs) = case shortH c of
     Just pa' -> doRun (CtxShort arg c) pa' cs
     Nothing -> Left $ SEUnexpectedChar c
-
--- TODO: drop the requirement that the characters are not '-'.
-getShorts :: String -> Maybe [Char]
-getShorts ('-':cs@(_:_:_)) | all (/= '-') cs = Just cs
-getShorts _ = Nothing
 
 missingArg :: Context -> List String -> ParserError
 missingArg ctx = MissingArg ctx . nubOrd . toList
@@ -319,17 +312,18 @@ runParser = doRun CtxStart where
   doRun ctx (Scan (Right (Right a)) _ _) [] = Right a
   doRun ctx (Scan (Right (Left e)) _ _) [] = Left $ toParserError CtxEnd e
 
-  doRun ctx pa@(Scan _ f _) (s:ss) = case f s of
+  doRun ctx pa@(Scan _ argH shortH) (s:ss) = case argH s of
     Just fpa -> case runFollower (CtxArg s) fpa ss of
       Right (ctx', pa', ss') -> doRun ctx' pa' ss'
       Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
       Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
-    Nothing -> case getShorts s of
-      Just cs -> case runShorts s ctx pa cs of
-        Right (ctx', pa') -> doRun ctx' pa' ss
-        Left (SEUnexpectedChar c) -> Left $ UnexpectedChar c s
-        Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
-      Nothing -> Left $ UnexpectedArg s
+    Nothing -> case s of
+      ('-':cs@(c:_:_)) | all (/= '-') cs && isJust (shortH c) ->
+        case runShorts s ctx pa cs of
+          Right (ctx', pa') -> doRun ctx' pa' ss
+          Left (SEUnexpectedChar c) -> Left $ UnexpectedChar c s
+          Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
+      _ -> Left $ UnexpectedArg s
 
 
 -- ** Instances
