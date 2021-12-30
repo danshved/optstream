@@ -481,6 +481,14 @@ buildMatchExample s = Example
   , consumes = singleton s
   }
 
+buildMatchShortExample :: Char -> Example Char
+buildMatchShortExample c = Example
+  { parser = matchShort c
+  , inputs = [['-', c]]
+  , result = c
+  , consumes = singleton ['-', c]
+  }
+
 
 -- | Represents an example of a successful parse with 'matchAndFollow'.
 data MAFExample = MAFExample String [(Metavar, Value)]
@@ -636,6 +644,7 @@ buildMultiParamExample (MultiParamExample helpChoice fs pairs)
 data AtomicExample
   = AtomicMatch AnyArg
   | AtomicMAF MAFExample
+  | AtomicMatchShort AnyChar
   | AtomicFlag FlagExample
   | AtomicParam ParamExample
   | AtomicFreeArg FreeArgExample
@@ -645,6 +654,8 @@ data AtomicExample
 atomicToMatch :: AtomicExample -> [AnyArg]
 atomicToMatch (AtomicMAF (MAFExample s _)) =
   [AnyArg s]
+atomicToMatch (AtomicMatchShort (AnyChar c)) =
+  [AnyArg ['-', c]]
 atomicToMatch (AtomicFlag (FlagExample _ _ fs)) =
   [AnyArg $ chosenForm fs]
 atomicToMatch (AtomicParam p) =
@@ -661,6 +672,11 @@ atomicToMAF (AtomicParam p) =
 atomicToMAF (AtomicMultiParam (MultiParamExample _ fs pairs)) =
   [MAFExample (chosenForm fs) pairs]
 atomicToMAF _ = []
+
+atomicToMatchShort :: AtomicExample -> [AnyChar]
+atomicToMatchShort (AtomicFlag (FlagExample _ _ (Forms _ ['-', c] _))) =
+  [AnyChar c]
+atomicToMatchShort _ = []
 
 atomicToFlag :: AtomicExample -> [FlagExample]
 atomicToFlag (AtomicParam p) =
@@ -679,6 +695,7 @@ instance Arbitrary AtomicExample where
   arbitrary = oneof
     [ AtomicMatch <$> arbitrary
     , AtomicMAF <$> arbitrary
+    , AtomicMatchShort <$> arbitrary
     , AtomicFlag <$> arbitrary
     , AtomicParam <$> arbitrary
     , AtomicFreeArg <$> arbitrary
@@ -687,6 +704,7 @@ instance Arbitrary AtomicExample where
 
   shrink e = (map AtomicMatch $ atomicToMatch e)
     ++ (map AtomicMAF $ atomicToMAF e)
+    ++ (map AtomicMatchShort $ atomicToMatchShort e)
     ++ (map AtomicFlag $ atomicToFlag e)
     ++ (map AtomicParam $ atomicToParam e)
     ++ genericShrink e
@@ -694,6 +712,8 @@ instance Arbitrary AtomicExample where
 buildAtomicExample :: AtomicExample -> Example String
 buildAtomicExample (AtomicMatch (AnyArg s)) = buildMatchExample s
 buildAtomicExample (AtomicMAF x) = concat <$> buildMAFExample x
+buildAtomicExample (AtomicMatchShort (AnyChar c)) =
+  (:[]) <$> buildMatchShortExample c
 buildAtomicExample (AtomicFlag x) = "" <$ buildFlagExample x
 buildAtomicExample (AtomicParam x) = buildParamExample x
 buildAtomicExample (AtomicFreeArg x) = buildFreeArgExample x

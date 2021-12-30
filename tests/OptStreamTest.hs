@@ -434,8 +434,6 @@ prop_matchAndFollow_NotEnough (AnyArg s) matches (NonEmpty pairs) =
 
 -- * Tests for matchShort
 
--- TODO: Add matchShort variant to AtomicExample.
-
 prop_matchShort_Matches (AnyChar c) =
   runParser (matchShort c) [['-', c]] === Right c
 
