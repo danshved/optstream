@@ -143,6 +143,19 @@ tests =
     , testProperty "Finishes"    prop_beforeDashes_Finishes
     , testProperty "AddsNoHelp"  prop_beforeDashes_AddsNoHelp
     ]
+
+  , testGroup "quiet"
+    [ testProperty "Matches"    prop_quiet_Matches
+    , testProperty "AddsNoHelp" prop_quiet_AddsNoHelp
+    ]
+
+  , testGroup "eject"
+    [ testProperty "Matches"         prop_eject_Matches
+    , testProperty "Ejects"          prop_eject_Ejects
+    , testProperty "EjectsAfter"     prop_eject_EjectsAfter
+    , testProperty "EjectsLongAfter" prop_eject_EjectsLongAfter
+    , testProperty "JoinsHelp"       prop_eject_JoinsHelp
+    ]
   ]
 
 -- | Helper parser that collects all the arguments that it gets.
@@ -601,6 +614,66 @@ prop_beforeDashes_AddsNoHelp builder =
   getHelp (beforeDashes $ parser ex) === getHelp (parser ex)
   where
     ex = buildGenericExample builder
+
+
+prop_quiet_Matches builder =
+  runParser (quiet $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_quiet_AddsNoHelp builder =
+  getHelp (quiet $ parser ex) === getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_eject_Matches b1 b2 =
+  runParser (eject (parser ex1) (parser ex2)) (inputs ex1)
+  === (Right . Right $ result ex1)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+-- TODO: Also check that 'eject' can eject in the middle of a parse.
+
+prop_eject_Ejects b1 b2 (AnyArgs ys) =
+  disjoint (consumes ex1) (consumes ex2) ==>
+  runParser (eject (parser ex1) (parser ex2)) (inputs ex2 ++ ys)
+  === (Right . Left $ result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_eject_EjectsAfter b1 b2 (AnyArgs ys) =
+  runParser (eject p1 p2) (i1 ++ i2 ++ ys) === (Right . Left $ r2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+    r2 = result ex2
+
+prop_eject_EjectsLongAfter b1 (AnyArgs ys) b2 (AnyArgs zs) =
+  not (any (`member` c2) ys) ==>
+  runParser ((,) <$> eject p1 p2 <#> args) (i1 ++ ys ++ i2 ++ zs)
+  === (Right (Left r2, ys))
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+    r2 = result ex2
+    c2 = consumes ex2
+
+prop_eject_JoinsHelp b1 b2 =
+  getHelp (eject p1 p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
 
 
 -- TODO: Test parse failures for *Char and *Read.

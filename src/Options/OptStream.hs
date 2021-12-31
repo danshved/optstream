@@ -497,7 +497,7 @@ matchAndFollow s = lift0 . R.matchAndFollow s . toRawFollower
 
 -- | Consumes and returns the exact given short flag, skips everything else.
 --
--- This 'Parser' supports bundling, but only for characters other than @\'-\'@.
+-- This 'Parser' supports bundling. If you don't want it, use 'match'.
 --
 -- ==== __Examples:__
 --
@@ -509,15 +509,6 @@ matchAndFollow s = lift0 . R.matchAndFollow s . toRawFollower
 --
 -- >>> runParserIO (many $ matchShort 'x') ["-xx"]
 -- "xx"
---
--- >>> runParserIO (many $ matchShort '-') ["--"]
--- "-"
---
--- >>> runParserIO (many $ matchShort '-') ["--", "--"]
--- "--"
---
--- >>> runParserIO (many $ matchShort '-') ["---"]
--- <interactive>: unexpected command line argument "---"
 matchShort :: Char
               -- ^ A short flag, e.g. @\'x\'@ will match @-x@ or an occurence
               -- of @\'x\'@ in a bundle of short flags like @-xyz@.
@@ -1740,11 +1731,7 @@ withVersionIO' :: String
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' = lift1 . R.withVersionIO'
 
--- TODO: (?) allow bundling even for '-' for low-level parsers for consistency.
---       Make sure error messages for unexpected argument "--foo" don't become
---       "unexpected character - in argument --foo" though. Keep option form
---       "--" illegal for high-level parsers.
---
+
 -- TODO: add anyArgRead et. al.
 
 -- TODO: Check laws for all instances in this file.

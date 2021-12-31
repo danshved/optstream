@@ -328,7 +328,7 @@ mkNext TypeString mv = next mv
 mkNext TypeReadInt mv = show <$> (nextRead mv :: Follower Int)
 mkNext TypeChar mv = (:[]) <$> nextChar mv
 
--- | Makes an arbitrary Follower for testing (using only <*>).
+-- | Makes an arbitrary Follower for testing (using only <*>, not >>=).
 mkFollower :: [(ValueType, Metavar)] -> Follower [String]
 mkFollower = traverse (uncurry mkNext)
 
@@ -336,7 +336,9 @@ mkFollower = traverse (uncurry mkNext)
 
 -- * Producing command line examples for testing
 
--- | Arbitrary string interesting for command line testing.
+
+-- | Arbitrary string interesting for command line testing. Produces roughly
+-- 50/50 strings starting with '-' and with other characters.
 arbitraryArg :: Gen String
 arbitraryArg = oneof
   [ arbitrary
@@ -350,7 +352,9 @@ arbitraryArg = oneof
     ]
   ]
 
--- | Arbitrary character interesting for command line testing.
+-- | Arbitrary character interesting for command line testing. Produces '-' at
+-- a reasonable rate, but not too often so that (listOf arbitraryChar) would
+-- still produce lists free of '-' from time to time.
 arbitraryChar :: Gen Char
 arbitraryChar = frequency
   [ (3, arbitrary)
