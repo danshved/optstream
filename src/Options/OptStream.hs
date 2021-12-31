@@ -1246,11 +1246,12 @@ paramHelp opts metavar desc = modifyHelp (makeParamHelp opts metavar desc <>)
 -- You may pass any number of parameter forms (except zero). However, only the
 -- first form of each kind (short and long) will appear in the help table.
 multiParamHelp :: [OptionForm]
-               -> String
                   -- ^ All multiparameter forms, e.g. @["-p", "--person"]@.
                -> String
                   -- ^ Follower help string, e.g. @"NAME AGE"@. Can be an
                   -- arbitrary string.
+               -> String
+                  -- ^ Description (arbitrary string).
                -> Parser a
                   -- ^ An existing 'Parser'.
                -> Parser a

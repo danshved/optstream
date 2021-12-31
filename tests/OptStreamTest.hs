@@ -156,6 +156,39 @@ tests =
     , testProperty "EjectsLongAfter" prop_eject_EjectsLongAfter
     , testProperty "JoinsHelp"       prop_eject_JoinsHelp
     ]
+
+  , testGroup "header"
+    [ testProperty "Matches"        prop_header_Matches
+    , testProperty "PrependsHeader" prop_header_PrependsHeader
+    ]
+
+  , testGroup "footer"
+    [ testProperty "Matches"        prop_footer_Matches
+    , testProperty "PrependsHeader" prop_footer_PrependsFooter
+    ]
+
+  , testGroup "flagHelp"
+    [ testProperty "Matches"      prop_flagHelp_Matches
+    , testProperty "PrependsHelp" prop_flagHelp_PrependsHelp
+    , testProperty "IllegalForm"  prop_flagHelp_IllegalForm
+    ]
+
+  , testGroup "paramHelp"
+    [ testProperty "Matches"      prop_paramHelp_Matches
+    , testProperty "PrependsHelp" prop_paramHelp_PrependsHelp
+    , testProperty "IllegalForm"  prop_paramHelp_IllegalForm
+    ]
+
+  , testGroup "freeArgHelp"
+    [ testProperty "Matches"      prop_freeArgHelp_Matches
+    , testProperty "PrependsHelp" prop_freeArgHelp_PrependsHelp
+    ]
+
+  , testGroup "multiParamHelp"
+    [ testProperty "Matches"      prop_multiParamHelp_Matches
+    , testProperty "PrependsHelp" prop_multiParamHelp_PrependsHelp
+    , testProperty "IllegalForm"  prop_multiParamHelp_IllegalForm
+    ]
   ]
 
 -- | Helper parser that collects all the arguments that it gets.
@@ -217,7 +250,8 @@ prop_flag_NotMatchesBundle help cs =
     parser = sequenceA [mkFlag help WithoutBundling [['-', c]] | c <- chars]
 
 prop_flag_Help desc bundling fs =
-  getHelp (mkFlag (WithHelp desc) bundling (allForms fs)) =/= mempty
+  getHelp (mkFlag (WithHelp desc) bundling (allForms fs))
+  === makeFlagHelp (allForms fs) desc
 
 prop_flag_NoHelp bundling fs =
   getHelp (mkFlag WithoutHelp bundling (allForms fs)) === mempty
@@ -271,7 +305,8 @@ prop_param_MissingArg help valueType metavar fs =
     parser = mkParam help valueType (allForms fs) metavar
 
 prop_param_Help desc valueType metavar fs =
-  getHelp (mkParam (WithHelp desc) valueType (allForms fs) metavar) =/= mempty
+  getHelp (mkParam (WithHelp desc) valueType (allForms fs) metavar)
+  === makeParamHelp (allForms fs) metavar desc
 
 prop_param_NoHelp valueType metavar fs =
   getHelp (mkParam WithoutHelp valueType (allForms fs) metavar) === mempty
@@ -314,7 +349,8 @@ prop_freeArg_NotMatches help valueType metavar a =
   isLeft' $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
 prop_freeArg_Help desc valueType metavar =
-  getHelp (mkFreeArg (WithHelp desc) valueType metavar) =/= mempty
+  getHelp (mkFreeArg (WithHelp desc) valueType metavar)
+  === makeFreeArgHelp metavar desc
 
 prop_freeArg_NoHelp valueType metavar =
   getHelp (mkFreeArg WithoutHelp valueType metavar) === mempty
@@ -364,9 +400,10 @@ prop_multiParam_NotEnough help fs matches (NonEmpty pairs) =
     parser = mkMultiParam help (allForms fs) (mkFollower pairs')
 
 prop_multiParam_Help desc fs pairs =
-  getHelp parser =/= mempty
+  getHelp (mkMultiParam (WithHelp desc) (allForms fs) follower)
+  === makeMultiParamHelp (allForms fs) (getFollowerHelp follower) desc
   where
-    parser = mkMultiParam (WithHelp desc) (allForms fs) (mkFollower pairs)
+    follower = mkFollower pairs
 
 prop_multiParam_NoHelp fs pairs =
   getHelp parser === mempty
@@ -674,6 +711,103 @@ prop_eject_JoinsHelp b1 b2 =
   where
     p1 = parser $ buildGenericExample b1
     p2 = parser $ buildGenericExample b2
+
+
+
+-- * Tests for manipulating help in 'Parser' objects.
+
+prop_header_Matches s builder =
+  runParser (header s $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_header_PrependsHeader s builder =
+  getHelp (header s $ parser ex) === makeHeader s <> getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_footer_Matches s builder =
+  runParser (footer s $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_footer_PrependsFooter s builder =
+  getHelp (footer s $ parser ex) === makeFooter s <> getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_flagHelp_Matches fs desc builder =
+  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+    modify = flagHelp (allForms fs) desc
+
+prop_flagHelp_PrependsHelp fs desc builder =
+  getHelp (flagHelp forms desc $ parser ex)
+  === makeFlagHelp forms desc <> getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+    forms = allForms fs
+
+prop_flagHelp_IllegalForm (ChosenIllegal fs) desc builder =
+  throwsError . formatHelp . getHelp . flagHelp (allForms fs) desc $ parser ex
+  where
+    ex = buildGenericExample builder
+
+
+prop_paramHelp_Matches fs metavar desc builder =
+  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+    modify = paramHelp (allForms fs) metavar desc
+
+prop_paramHelp_PrependsHelp fs metavar desc builder =
+  getHelp (paramHelp forms metavar desc $ parser ex)
+  === makeParamHelp forms metavar desc <> getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+    forms = allForms fs
+
+prop_paramHelp_IllegalForm (ChosenIllegal fs) metavar desc builder =
+  throwsError . formatHelp . getHelp
+  . paramHelp (allForms fs) metavar desc $ parser ex
+  where
+    ex = buildGenericExample builder
+
+
+prop_freeArgHelp_Matches metavar desc builder =
+  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+    modify = freeArgHelp metavar desc
+
+prop_freeArgHelp_PrependsHelp metavar desc builder =
+  getHelp (freeArgHelp metavar desc $ parser ex)
+  === makeFreeArgHelp metavar desc <> getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_multiParamHelp_Matches fs fh desc builder =
+  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+    modify = multiParamHelp (allForms fs) fh desc
+
+prop_multiParamHelp_PrependsHelp fs fh desc builder =
+  getHelp (multiParamHelp forms fh desc $ parser ex)
+  === makeMultiParamHelp forms fh desc <> getHelp (parser ex)
+  where
+    ex = buildGenericExample builder
+    forms = allForms fs
+
+prop_multiParamHelp_IllegalForm (ChosenIllegal fs) fh desc builder =
+  throwsError . formatHelp . getHelp
+  . multiParamHelp (allForms fs) fh desc $ parser ex
+  where
+    ex = buildGenericExample builder
 
 
 -- TODO: Test parse failures for *Char and *Read.
