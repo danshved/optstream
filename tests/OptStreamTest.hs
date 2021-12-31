@@ -189,7 +189,33 @@ tests =
     , testProperty "PrependsHelp" prop_multiParamHelp_PrependsHelp
     , testProperty "IllegalForm"  prop_multiParamHelp_IllegalForm
     ]
+
+  , testGroup "clearHelp"
+    [ testProperty "Matches" prop_clearHelp_Matches
+    , testProperty "ClearsHelp" prop_clearHelp_ClearsHelp
+    ]
+
+  , testGroup "clearHeader"
+    [ testProperty "Matches" prop_clearHeader_Matches
+    , testProperty "ClearsHeader" prop_clearHeader_ClearsHeader
+    ]
+
+  , testGroup "clearFooter"
+    [ testProperty "Matches" prop_clearFooter_Matches
+    , testProperty "ClearsFooter" prop_clearFooter_ClearsFooter
+    ]
+
+  , testGroup "clearTable"
+    [ testProperty "Matches" prop_clearTable_Matches
+    , testProperty "ClearsTable" prop_clearTable_ClearsTable
+    ]
+
+  , testGroup "sortTable"
+    [ testProperty "Matches" prop_sortTable_Matches
+    , testProperty "SortsTable" prop_sortTable_SortsTable
+    ]
   ]
+
 
 -- | Helper parser that collects all the arguments that it gets.
 args :: Parser [String]
@@ -808,6 +834,63 @@ prop_multiParamHelp_IllegalForm (ChosenIllegal fs) fh desc builder =
   . multiParamHelp (allForms fs) fh desc $ parser ex
   where
     ex = buildGenericExample builder
+
+
+prop_clearHelp_Matches builder =
+  runParser (clearHelp $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_clearHelp_ClearsHelp builder =
+  getHelp (clearHelp $ parser ex) === mempty
+  where
+    ex = buildGenericExample builder
+
+
+prop_clearHeader_Matches builder =
+  runParser (clearHeader $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_clearHeader_ClearsHeader builder =
+  getHelp (clearHeader $ parser ex) === clearHelpHeader (getHelp $ parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_clearFooter_Matches builder =
+  runParser (clearFooter $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_clearFooter_ClearsFooter builder =
+  getHelp (clearFooter $ parser ex) === clearHelpFooter (getHelp $ parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_clearTable_Matches builder =
+  runParser (clearTable $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_clearTable_ClearsTable builder =
+  getHelp (clearTable $ parser ex) === clearHelpTable (getHelp $ parser ex)
+  where
+    ex = buildGenericExample builder
+
+
+prop_sortTable_Matches builder =
+  runParser (sortTable $ parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_sortTable_SortsTable builder =
+  getHelp (sortTable $ parser ex) === sortHelpTable (getHelp $ parser ex)
+  where
+    ex = buildGenericExample builder
+
+
 
 
 -- TODO: Test parse failures for *Char and *Read.
