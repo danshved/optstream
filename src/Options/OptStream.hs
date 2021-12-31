@@ -189,12 +189,12 @@ import Data.Functor
 import Data.List hiding (last)
 import Data.Maybe
 import Data.Monoid
-import System.Environment
-import System.Exit
+import Prelude hiding (putStrLn)
 
 import Options.OptStream.Classes
 import Options.OptStream.Help
 import Options.OptStream.Internal
+import Options.OptStream.IOOps
 import Options.OptStream.Raw
   ( RawParser
   , RawFollower
@@ -469,8 +469,8 @@ quiet = lift1 R.quiet
 -- Parser @b@ then runs until the end and its result is returned in a 'Left'
 -- value. Any arguments left unread after @b@ has finished are also discarded.
 --
--- This is used in the implementation of @--help@ and @--version@. You can use
--- it to make similar-behaving flags.
+-- This is used in the implementation of 'withHelp' and 'withVersion'. You can
+-- use it to make similar-behaving flags.
 eject :: Parser a
          -- ^ An existing parser.
       -> Parser b
@@ -1413,6 +1413,7 @@ withSubHelp = clearHelp . withHelp
 withSubHelp' :: Parser a -> Parser (Either Help a)
 withSubHelp' = clearHelp . withHelp'
 
+
 -- ** IO helpers
 
 -- | 'runParserIO' is like 'runParser', except that it terminates the program
@@ -1426,7 +1427,7 @@ withSubHelp' = clearHelp . withHelp'
 --
 -- >>> runParserIO (param' ["--foo"] "FOO") []
 -- <interactive>: missing command line argument: --foo
-runParserIO :: Parser a -> [String] -> IO a
+runParserIO :: IOOps m => Parser a -> [String] -> m a
 runParserIO = R.runParserIO . toRaw
 
 -- | 'parseArgs' is like 'runParserIO', except that it gets the arguments from
@@ -1441,7 +1442,7 @@ runParserIO = R.runParserIO . toRaw
 -- >
 -- >   contents <- readFile src
 -- >   writeFile dst contents
-parseArgs :: Parser a -> IO a
+parseArgs :: IOOps m => Parser a -> m a
 parseArgs = R.parseArgs . toRaw
 
 -- | 'parseArgsWithHelp' is like 'parseArgs', but it also adds a @--help@
@@ -1469,7 +1470,7 @@ parseArgs = R.parseArgs . toRaw
 --       --help         Show this help message and exit.
 -- <BLANKLINE>
 -- Example: copy -i input.txt -o output.txt
-parseArgsWithHelp :: Parser a -> IO a
+parseArgsWithHelp :: IOOps m => Parser a -> m a
 parseArgsWithHelp pa = do
   args <- getArgs
   case runParser (withHelp pa) args of
@@ -1516,14 +1517,14 @@ parseArgsWithHelp pa = do
 --
 -- Note how this parser is then executed:
 --
--- > join . parseArgsWithHelp :: Parser (IO a) -> IO a
+-- > join . parseArgsWithHelp :: Parser (IO ()) -> IO ()
 --
 -- This composition @(join . parseArgsWithHelp)@ returns an IO action that does
 -- all of the following:
 --
 --   * Extracts command line arguments from the environment.
 --   * Parses them, handling errors and @--help@.
---   * Executes the @IO a@ action that resulted from the parse (this part is
+--   * Executes the @IO ()@ action that resulted from the parse (this part is
 --   accomplished by 'join').
 --
 -- Of course IO-style parsers don't preclude the use of an intermediate data
@@ -1549,7 +1550,7 @@ parseArgsWithHelp pa = do
 --       --help         Show this help message and exit.
 
 
-helpToIO :: Either Help a -> IO a
+helpToIO :: IOOps m => Either Help a -> m a
 helpToIO (Right a) = return a
 helpToIO (Left h) = do
   putStrLn $ formatHelp h
@@ -1564,9 +1565,10 @@ helpToIO (Left h) = do
 -- If you are using 'parseArgsWithHelp', that will already take care of all the
 -- above. However, sometimes you may still want to use 'withHelpIO' or
 -- 'withSubHelpIO' to deal with subcommands, or in other special cases.
-withHelpIO :: Parser (IO a)
+withHelpIO :: IOOps m
+           => Parser (m a)
               -- ^ An existing IO-style 'Parser'.
-           -> Parser (IO a)
+           -> Parser (m a)
               -- ^ A wrapper that handles @--help@.
 withHelpIO = fmap (join . helpToIO) . withHelp
 
@@ -1593,9 +1595,10 @@ withHelpIO = fmap (join . helpToIO) . withHelp
 -- Usage: hello [NAME]
 -- <BLANKLINE>
 --   --help  Print this special help message!
-withHelpIO' :: Parser (IO a)
+withHelpIO' :: IOOps m
+            => Parser (m a)
                -- ^ An existing IO-style 'Parser'.
-            -> Parser (IO a)
+            -> Parser (m a)
                -- ^ A wrapper that handles @--help@.
 withHelpIO' = fmap (join . helpToIO) . withHelp'
 
@@ -1665,9 +1668,10 @@ withHelpIO' = fmap (join . helpToIO) . withHelp'
 --   --help     Show this help message and exit.
 -- <BLANKLINE>
 -- Example: email fetch --limit=10
-withSubHelpIO :: Parser (IO a)
+withSubHelpIO :: IOOps m
+              => Parser (m a)
                  -- ^ An existing IO-style 'Parser'.
-              -> Parser (IO a)
+              -> Parser (m a)
                  -- ^ A wrapper that handles @--help@.
 withSubHelpIO = fmap (join . helpToIO) . withSubHelp
 
@@ -1675,9 +1679,10 @@ withSubHelpIO = fmap (join . helpToIO) . withSubHelp
 -- flag itself. Equivalent to:
 --
 -- > clearHelp . withHelpIO'
-withSubHelpIO' :: Parser (IO a)
+withSubHelpIO' :: IOOps m
+               => Parser (m a)
                   -- ^ An existing IO-style 'Parser'.
-               -> Parser (IO a)
+               -> Parser (m a)
                   -- ^ A wrapper that handles @--help@.
 withSubHelpIO' = fmap (join . helpToIO) . withSubHelp'
 
@@ -1715,20 +1720,22 @@ withSubHelpIO' = fmap (join . helpToIO) . withSubHelp'
 --   --help     Show this help message and exit.
 -- <BLANKLINE>
 -- Example: hello 'Sherlock Holmes'
-withVersionIO :: String
+withVersionIO :: IOOps m
+              => String
                  -- ^ Version information to show to the user.
-              -> Parser (IO a)
+              -> Parser (m a)
                  -- ^ An existing 'Parser'.
-              -> Parser (IO a)
+              -> Parser (m a)
                  -- ^ A wrapper that handles @--version@.
 withVersionIO s = fmap (join . versionToIO) . withVersion s
 
 -- | Like 'withVersionIO' but doesn't generate help about the @--version@ flag.
-withVersionIO' :: String
+withVersionIO' :: IOOps m
+               => String
                   -- ^ Version information to show to the user.
-               -> Parser (IO a)
+               -> Parser (m a)
                   -- ^ An existing 'Parser'.
-               -> Parser (IO a)
+               -> Parser (m a)
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' = lift1 . R.withVersionIO'
 

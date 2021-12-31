@@ -14,7 +14,9 @@ import Data.Foldable
 import Data.Function
 import Data.List
 import Data.Maybe
-import System.Exit
+import Prelude hiding (putStrLn)
+
+import Options.OptStream.IOOps
 
 
 -- * Quickly composable lists
@@ -106,7 +108,7 @@ parseOptionForm s = case parseOptionForm_ s of
 
 -- * Miscellaneous
 
-versionToIO :: Either String a -> IO a
+versionToIO :: IOOps m => Either String a -> m a
 versionToIO (Right a) = return a
 versionToIO (Left s) = do
   putStrLn s

@@ -68,12 +68,11 @@ import Data.Functor
 import Data.List
 import Data.Maybe
 import Data.Monoid
-import System.Environment
-import System.Exit
 import Text.Read
 
 import Options.OptStream.Classes
 import Options.OptStream.Internal
+import Options.OptStream.IOOps
 
 
 -- * Errors
@@ -753,7 +752,7 @@ beforeDashes pa =  pa <-# (void (match "--") <|> orElse ())
 -- ** IO helpers
 
 -- | See 'Options.OptStream.runParserIO'.
-runParserIO :: RawParser a -> [String] -> IO a
+runParserIO :: IOOps m => RawParser a -> [String] -> m a
 runParserIO pa args = case runParser pa args of
   Right a -> return a
   Left e -> do
@@ -761,15 +760,15 @@ runParserIO pa args = case runParser pa args of
     die $ name ++ ": " ++ formatParserError e
 
 -- | See 'Options.OptStream.parseArgs'.
-parseArgs :: RawParser a -> IO a
+parseArgs :: IOOps m => RawParser a -> m a
 parseArgs pa = getArgs >>= runParserIO pa
 
 -- | See 'Options.OptStream.withVersionIO''.
-withVersionIO' :: String
+withVersionIO' :: IOOps m => String
                   -- ^ Version information to show to the user.
-               -> RawParser (IO a)
+               -> RawParser (m a)
                   -- ^ An existing 'RawParser'.
-               -> RawParser (IO a)
+               -> RawParser (m a)
                   -- ^ A wrapper that handles @--version@.
 withVersionIO' s = fmap (join . versionToIO) . withVersion' s
 

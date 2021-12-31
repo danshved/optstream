@@ -19,7 +19,8 @@ library
   exposed-modules:     Options.OptStream,
                        Options.OptStream.Classes,
                        Options.OptStream.Raw,
-                       Options.OptStream.Help
+                       Options.OptStream.Help,
+                       Options.OptStream.IOOps
   other-modules:       Options.OptStream.Internal
   -- other-extensions:
   build-depends:       base >=4.13 && < 4.17
