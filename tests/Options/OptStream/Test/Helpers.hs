@@ -12,6 +12,7 @@ import Test.QuickCheck
 import qualified Prelude as P
 
 import Options.OptStream
+import Options.OptStream.IOOps
 import Options.OptStream.Test.TestIO
 
 
@@ -137,6 +138,8 @@ isDie' x = counterexample (prefix ++ showsPrec 11 x "") res
 diesWithoutStdout :: Show a => (TestResult a, String) -> Property
 diesWithoutStdout (res, stdout) = isDie' res .&&. stdout === ""
 
+sameIO :: (Eq a, Show a) => TestIO a -> TestIO a -> Property
+sameIO x y = forAll arbitrary $ \env -> runTestIO x env === runTestIO y env
 
 
 -- * Producing atomic parsers for testing
@@ -759,3 +762,10 @@ type GenericExample = AtomicExample
 buildGenericExample :: GenericExample -> Example String
 buildGenericExample = buildAtomicExample
 
+
+-- | Represents a generic IO-style parser for testing, together with an example
+-- input for a successful parse.
+type GenericIOExample = GenericExample
+
+buildGenericIOExample :: GenericIOExample -> Example (TestIO String)
+buildGenericIOExample = fmap return . buildGenericExample

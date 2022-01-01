@@ -1,15 +1,18 @@
 module Main where
 
 import Control.Applicative hiding (some, many, optional)
+import Control.Monad
 import Data.Either
 import Data.Functor
 import Data.List
+import Prelude hiding (putStrLn)
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 
 import Options.OptStream
 import Options.OptStream.Help
+import Options.OptStream.IOOps
 import Options.OptStream.Test.Helpers hiding (null)
 import Options.OptStream.Test.TestIO hiding (args)
 
@@ -231,6 +234,30 @@ tests =
     [ testProperty "Returns"    prop_parseArgsWithHelp_Returns
     , testProperty "PrintsHelp" prop_parseArgsWithHelp_PrintsHelp
     , testProperty "Dies"       prop_parseArgsWithHelp_Dies
+    ]
+
+  , testGroup "withHelpIO"
+    [ testProperty "MatchesMain" prop_withHelpIO_MatchesMain
+    , testProperty "MatchesHelp" prop_withHelpIO_MatchesHelp
+    , testProperty "AddsHelp"    prop_withHelpIO_AddsHelp
+    ]
+
+  , testGroup "withHelpIO'"
+    [ testProperty "MatchesMain" prop_withHelpIO'_MatchesMain
+    , testProperty "MatchesHelp" prop_withHelpIO'_MatchesHelp
+    , testProperty "AddsNoHelp"  prop_withHelpIO'_AddsNoHelp
+    ]
+
+  , testGroup "withSubHelpIO"
+    [ testProperty "MatchesMain" prop_withSubHelpIO_MatchesMain
+    , testProperty "MatchesHelp" prop_withSubHelpIO_MatchesHelp
+    , testProperty "ClearsHelp"  prop_withSubHelpIO_ClearsHelp
+    ]
+
+  , testGroup "withSubHelpIO'"
+    [ testProperty "MatchesMain" prop_withSubHelpIO'_MatchesMain
+    , testProperty "MatchesHelp" prop_withSubHelpIO'_MatchesHelp
+    , testProperty "ClearsHelp"  prop_withSubHelpIO'_ClearsHelp
     ]
   ]
 
@@ -912,9 +939,8 @@ prop_sortTable_SortsTable builder =
 
 -- * Tests for IO functions
 
-prop_runParserIO_Returns builder env =
-  runTestIO' (runParserIO (parser ex) (inputs ex)) env
-  === (TestReturn (result ex), "")
+prop_runParserIO_Returns builder =
+  runParserIO (parser ex) (inputs ex) `sameIO` return (result ex)
   where
     ex = buildGenericExample builder
 
@@ -958,6 +984,85 @@ prop_parseArgsWithHelp_Dies builder env@(TestEnv _ as) =
   where
     ex = buildGenericExample builder
 
+
+prop_withHelpIO_MatchesMain builder =
+  join (runParserIO (withHelpIO $ parser ex) (inputs ex)) `sameIO` result ex
+  where
+    ex = buildGenericIOExample builder
+
+prop_withHelpIO_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  join (runParserIO (withHelpIO p) ["--help"]) `sameIO` do
+    putStrLn . formatHelp . getHelp $ withHelp p
+    exitSuccess
+  where
+    ex = buildGenericIOExample builder
+    p = parser ex
+
+prop_withHelpIO_AddsHelp builder =
+  getHelp (withHelpIO $ parser ex) === getHelp (withHelp $ parser ex)
+  where
+    ex = buildGenericIOExample builder
+
+
+prop_withHelpIO'_MatchesMain builder =
+  join (runParserIO (withHelpIO' $ parser ex) (inputs ex)) `sameIO` result ex
+  where
+    ex = buildGenericIOExample builder
+
+prop_withHelpIO'_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  join (runParserIO (withHelpIO' p) ["--help"]) `sameIO` do
+    putStrLn . formatHelp $ getHelp p
+    exitSuccess
+  where
+    ex = buildGenericIOExample builder
+    p = parser ex
+
+prop_withHelpIO'_AddsNoHelp builder =
+  getHelp (withHelpIO' $ parser ex) === getHelp (parser ex)
+  where
+    ex = buildGenericIOExample builder
+
+
+prop_withSubHelpIO_MatchesMain builder =
+  join (runParserIO (withSubHelpIO $ parser ex) (inputs ex)) `sameIO` result ex
+  where
+    ex = buildGenericIOExample builder
+
+prop_withSubHelpIO_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  join (runParserIO (withSubHelpIO p) ["--help"]) `sameIO` do
+    putStrLn . formatHelp . getHelp $ withHelp p
+    exitSuccess
+  where
+    ex = buildGenericIOExample builder
+    p = parser ex
+
+prop_withSubHelpIO_ClearsHelp builder =
+  getHelp (withSubHelpIO $ parser ex) === mempty
+  where
+    ex = buildGenericIOExample builder
+
+
+prop_withSubHelpIO'_MatchesMain builder =
+  join (runParserIO (withSubHelpIO' $ parser ex) (inputs ex)) `sameIO` result ex
+  where
+    ex = buildGenericIOExample builder
+
+prop_withSubHelpIO'_MatchesHelp builder =
+  not ("--help" `member` consumes ex) ==>
+  join (runParserIO (withSubHelpIO' p) ["--help"]) `sameIO` do
+    putStrLn . formatHelp $ getHelp p
+    exitSuccess
+  where
+    ex = buildGenericIOExample builder
+    p = parser ex
+
+prop_withSubHelpIO'_ClearsHelp builder =
+  getHelp (withSubHelpIO' $ parser ex) === mempty
+  where
+    ex = buildGenericIOExample builder
 
 
 -- TODO: Test parse failures for *Char and *Read.
