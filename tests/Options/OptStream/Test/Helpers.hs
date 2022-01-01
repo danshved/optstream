@@ -102,16 +102,16 @@ intersectChunks f@FreeArgs p@(WithPrefix _) = intersectChunks p f
 -- * QuickCheck helpers
 
 isLeft' :: (Show a, Show b) => Either a b -> Property
-isLeft' x = counterexample (kind x ++ showsPrec 11 x "") (isLeft x)
+isLeft' x = counterexample (prefix ++ showsPrec 11 x "") res
   where
-    kind (Left _) = "isLeft "
-    kind (Right _) = "isRight "
+    res = isLeft x
+    prefix = if res then "isLeft " else "not $ isLeft "
 
 isRight' :: (Show a, Show b) => Either a b -> Property
-isRight' x = counterexample (kind x ++ showsPrec 11 x "") (isRight x)
+isRight' x = counterexample (prefix ++ showsPrec 11 x "") res
   where
-    kind (Left _) = "isLeft "
-    kind (Right _) = "isRight "
+    res = isRight x
+    prefix = if res then "isRight " else "not $ isRight "
 
 throwsError :: a -> Property
 throwsError a = ioProperty $ isErrorCall <$> try (evaluate a)
@@ -397,6 +397,8 @@ newtype AnyChars = AnyChars [Char]
 instance Arbitrary AnyChars where
   arbitrary = AnyChars <$> listOf arbitraryChar
   shrink = genericShrink
+
+
 
 
 -- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or

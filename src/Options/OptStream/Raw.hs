@@ -764,7 +764,8 @@ parseArgs :: IOOps m => RawParser a -> m a
 parseArgs pa = getArgs >>= runParserIO pa
 
 -- | See 'Options.OptStream.withVersionIO''.
-withVersionIO' :: IOOps m => String
+withVersionIO' :: IOOps m
+               => String
                   -- ^ Version information to show to the user.
                -> RawParser (m a)
                   -- ^ An existing 'RawParser'.

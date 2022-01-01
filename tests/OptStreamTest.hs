@@ -1,6 +1,7 @@
 module Main where
 
 import Control.Applicative hiding (some, many, optional)
+import Data.Either
 import Data.Functor
 import Data.List
 import Test.Framework
@@ -10,6 +11,7 @@ import Test.QuickCheck
 import Options.OptStream
 import Options.OptStream.Help
 import Options.OptStream.Test.Helpers hiding (null)
+import Options.OptStream.Test.TestIO hiding (args)
 
 main :: IO ()
 main = defaultMain tests
@@ -213,6 +215,22 @@ tests =
   , testGroup "sortTable"
     [ testProperty "Matches" prop_sortTable_Matches
     , testProperty "SortsTable" prop_sortTable_SortsTable
+    ]
+
+  , testGroup "runParserIO"
+    [ testProperty "Returns" prop_runParserIO_Returns
+    , testProperty "Dies"    prop_runParserIO_Dies
+    ]
+
+  , testGroup "parseArgs"
+    [ testProperty "Returns" prop_parseArgs_Returns
+    , testProperty "Dies"    prop_parseArgs_Dies
+    ]
+
+  , testGroup "parseArgsWithHelp"
+    [ testProperty "Returns"    prop_parseArgsWithHelp_Returns
+    , testProperty "PrintsHelp" prop_parseArgsWithHelp_PrintsHelp
+    , testProperty "Dies"       prop_parseArgsWithHelp_Dies
     ]
   ]
 
@@ -890,6 +908,55 @@ prop_sortTable_SortsTable builder =
   where
     ex = buildGenericExample builder
 
+
+
+-- * Tests for IO functions
+
+prop_runParserIO_Returns builder env =
+  runTestIO (runParserIO (parser ex) (inputs ex)) env
+  === (TestReturn (result ex), "")
+  where
+    ex = buildGenericExample builder
+
+prop_runParserIO_Dies builder (AnyArgs as) env =
+  isLeft (runParser (parser ex) as) ==>
+  diesWithoutStdout $ runTestIO (runParserIO (parser ex) as) env
+  where
+    ex = buildGenericExample builder
+
+
+prop_parseArgs_Returns builder s =
+  runTestIO (parseArgs (parser ex)) (TestEnv s (inputs ex))
+  === (TestReturn (result ex), "")
+  where
+    ex = buildGenericExample builder
+
+prop_parseArgs_Dies builder env@(TestEnv _ as) =
+  isLeft (runParser (parser ex) as) ==>
+  diesWithoutStdout $ runTestIO (parseArgs $ parser ex) env
+  where
+    ex = buildGenericExample builder
+
+
+prop_parseArgsWithHelp_Returns builder s =
+  runTestIO (parseArgsWithHelp (parser ex)) (TestEnv s (inputs ex))
+  === (TestReturn (result ex), "")
+  where
+    ex = buildGenericExample builder
+
+prop_parseArgsWithHelp_PrintsHelp builder s =
+  not ("--help" `member` consumes ex) ==>
+  runTestIO (parseArgsWithHelp p) (TestEnv s ["--help"])
+  === (TestExitSuccess, (formatHelp . getHelp $ withHelp p) ++ "\n")
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_parseArgsWithHelp_Dies builder env@(TestEnv _ as) =
+  isLeft (runParser (withHelp $ parser ex) as) ==>
+  diesWithoutStdout $ runTestIO (parseArgsWithHelp $ parser ex) env
+  where
+    ex = buildGenericExample builder
 
 
 
