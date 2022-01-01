@@ -12,6 +12,7 @@ import Test.QuickCheck
 import qualified Prelude as P
 
 import Options.OptStream
+import Options.OptStream.Test.TestIO
 
 
 -- * ArgLanguage
@@ -118,6 +119,23 @@ throwsError a = ioProperty $ isErrorCall <$> try (evaluate a)
   where
     isErrorCall :: Either ErrorCall a -> Bool
     isErrorCall = isLeft
+
+
+
+-- * Helpers for TestIO
+
+instance Arbitrary TestEnv where
+  arbitrary = TestEnv <$> arbitrary <*> listOf arbitraryArg
+  shrink = genericShrink
+
+isDie' :: Show a => TestResult a -> Property
+isDie' x = counterexample (prefix ++ showsPrec 11 x "") res
+  where
+    res = isDie x
+    prefix = if res then "isDie " else "not $ isDie "
+
+diesWithoutStdout :: Show a => (TestResult a, String) -> Property
+diesWithoutStdout (res, stdout) = isDie' res .&&. stdout === ""
 
 
 
