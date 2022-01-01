@@ -139,7 +139,7 @@ diesWithoutStdout :: Show a => (TestResult a, String) -> Property
 diesWithoutStdout (res, stdout) = isDie' res .&&. stdout === ""
 
 sameIO :: (Eq a, Show a) => TestIO a -> TestIO a -> Property
-sameIO x y = forAll arbitrary $ \env -> runTestIO x env === runTestIO y env
+sameIO x y = property $ \env -> runTestIO x env === runTestIO y env
 
 
 -- * Producing atomic parsers for testing

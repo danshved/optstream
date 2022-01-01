@@ -259,6 +259,18 @@ tests =
     , testProperty "MatchesHelp" prop_withSubHelpIO'_MatchesHelp
     , testProperty "ClearsHelp"  prop_withSubHelpIO'_ClearsHelp
     ]
+
+  , testGroup "withVersionIO"
+    [ testProperty "MatchesMain"    prop_withVersionIO_MatchesMain
+    , testProperty "MatchesVersion" prop_withVersionIO_MatchesVersion
+    , testProperty "AddsHelp"       prop_withVersionIO_AddsHelp
+    ]
+
+  , testGroup "withVersionIO'"
+    [ testProperty "MatchesMain"    prop_withVersionIO'_MatchesMain
+    , testProperty "MatchesVersion" prop_withVersionIO'_MatchesVersion
+    , testProperty "AddsNoHelp"     prop_withVersionIO'_AddsNoHelp
+    ]
   ]
 
 
@@ -1061,6 +1073,46 @@ prop_withSubHelpIO'_MatchesHelp builder =
 
 prop_withSubHelpIO'_ClearsHelp builder =
   getHelp (withSubHelpIO' $ parser ex) === mempty
+  where
+    ex = buildGenericIOExample builder
+
+
+prop_withVersionIO_MatchesMain s builder =
+  join (runParserIO (withVersionIO s p) (inputs ex)) `sameIO` result ex
+  where
+    ex = buildGenericIOExample builder
+    p = parser ex
+
+prop_withVersionIO_MatchesVersion s builder =
+  not ("--version" `member` consumes ex) ==>
+  join (runParserIO (withVersionIO s $ parser ex) ["--version"]) `sameIO` do
+    putStrLn s
+    exitSuccess
+  where
+    ex = buildGenericIOExample builder
+
+prop_withVersionIO_AddsHelp s builder =
+  getHelp (withVersionIO s $ parser ex) === getHelp (withVersion s $ parser ex)
+  where
+    ex = buildGenericIOExample builder
+
+
+prop_withVersionIO'_MatchesMain s builder =
+  join (runParserIO (withVersionIO' s p) (inputs ex)) `sameIO` result ex
+  where
+    ex = buildGenericIOExample builder
+    p = parser ex
+
+prop_withVersionIO'_MatchesVersion s builder =
+  not ("--version" `member` consumes ex) ==>
+  join (runParserIO (withVersionIO' s $ parser ex) ["--version"]) `sameIO` do
+    putStrLn s
+    exitSuccess
+  where
+    ex = buildGenericIOExample builder
+
+prop_withVersionIO'_AddsNoHelp s builder =
+  getHelp (withVersionIO' s $ parser ex) === getHelp (parser ex)
   where
     ex = buildGenericIOExample builder
 
