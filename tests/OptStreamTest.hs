@@ -913,40 +913,40 @@ prop_sortTable_SortsTable builder =
 -- * Tests for IO functions
 
 prop_runParserIO_Returns builder env =
-  runTestIO (runParserIO (parser ex) (inputs ex)) env
+  runTestIO' (runParserIO (parser ex) (inputs ex)) env
   === (TestReturn (result ex), "")
   where
     ex = buildGenericExample builder
 
 prop_runParserIO_Dies builder (AnyArgs as) env =
   isLeft (runParser (parser ex) as) ==>
-  diesWithoutStdout $ runTestIO (runParserIO (parser ex) as) env
+  diesWithoutStdout $ runTestIO' (runParserIO (parser ex) as) env
   where
     ex = buildGenericExample builder
 
 
 prop_parseArgs_Returns builder s =
-  runTestIO (parseArgs (parser ex)) (TestEnv s (inputs ex))
+  runTestIO' (parseArgs (parser ex)) (TestEnv s (inputs ex))
   === (TestReturn (result ex), "")
   where
     ex = buildGenericExample builder
 
 prop_parseArgs_Dies builder env@(TestEnv _ as) =
   isLeft (runParser (parser ex) as) ==>
-  diesWithoutStdout $ runTestIO (parseArgs $ parser ex) env
+  diesWithoutStdout $ runTestIO' (parseArgs $ parser ex) env
   where
     ex = buildGenericExample builder
 
 
 prop_parseArgsWithHelp_Returns builder s =
-  runTestIO (parseArgsWithHelp (parser ex)) (TestEnv s (inputs ex))
+  runTestIO' (parseArgsWithHelp (parser ex)) (TestEnv s (inputs ex))
   === (TestReturn (result ex), "")
   where
     ex = buildGenericExample builder
 
 prop_parseArgsWithHelp_PrintsHelp builder s =
   not ("--help" `member` consumes ex) ==>
-  runTestIO (parseArgsWithHelp p) (TestEnv s ["--help"])
+  runTestIO' (parseArgsWithHelp p) (TestEnv s ["--help"])
   === (TestExitSuccess, (formatHelp . getHelp $ withHelp p) ++ "\n")
   where
     ex = buildGenericExample builder
@@ -954,7 +954,7 @@ prop_parseArgsWithHelp_PrintsHelp builder s =
 
 prop_parseArgsWithHelp_Dies builder env@(TestEnv _ as) =
   isLeft (runParser (withHelp $ parser ex) as) ==>
-  diesWithoutStdout $ runTestIO (parseArgsWithHelp $ parser ex) env
+  diesWithoutStdout $ runTestIO' (parseArgsWithHelp $ parser ex) env
   where
     ex = buildGenericExample builder
 
