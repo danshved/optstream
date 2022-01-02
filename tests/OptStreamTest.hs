@@ -283,6 +283,11 @@ tests =
     , testProperty "Finishes"   prop_pure_Finishes
     , testProperty "NotMatches" prop_pure_NotMatches
     ]
+
+  , testGroup "ap"
+    [ testProperty "Matches"    prop_ap_Matches
+    , testProperty "MatchesFar" prop_ap_MatchesFar
+    ]
   ]
 
 
@@ -1155,6 +1160,30 @@ prop_pure_Finishes (x :: Int) (AnyArgs as) =
 prop_pure_NotMatches (x :: Int) (AnyArgs as) =
   not (null as) ==>
   isLeft' $ runParser (pure x) as
+
+
+-- TODO: make this test fail by generating better GenericExample. Then fix by
+-- requiring that the first parser finishes without waiting for EOF.
+prop_ap_Matches b1 b2 =
+  runParser ((,) <$> parser ex1 <*> parser ex2) (inputs ex1 ++ inputs ex2)
+  === Right (result ex1, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_ap_MatchesFar b1 b2 (AnyArgs as) =
+  not (any (`member` c2) as) ==>
+  runParser (((,) <$> p1 <*> p2) <# args) (i1 ++ as ++ i2) === Right (r1, r2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+    r1 = result ex1
+    r2 = result ex2
+    c2 = consumes ex2
 
 
 -- TODO: Test parse failures for *Char and *Read.
