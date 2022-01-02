@@ -311,6 +311,12 @@ tests =
     , testProperty "LeftEmpty"     prop_alternative_LeftEmpty
     , testProperty "RightEmpty"    prop_alternative_RightEmpty
     ]
+
+  , testGroup "eof"
+    [ testProperty "Empty"  prop_eof_Empty
+    , testProperty "Skips"  prop_eof_Skips
+    , testProperty "OrElse" prop_eof_OrElse
+    ]
   ]
 
 
@@ -1276,6 +1282,21 @@ prop_alternative_RightEmpty builder =
   runParser (parser ex <|> empty) (inputs ex) === Right (result ex)
   where
     ex = buildGenericExample builder
+
+
+
+-- * Tests for SubstreamParser
+
+prop_eof_Empty =
+  runParser eof [] === Right ()
+
+prop_eof_Skips (AnyArgs as) =
+  runParser (eof #> args) as === Right as
+
+prop_eof_OrElse =
+  runParser (eof $> True <|> orElse False) [] === Right True
+
+
 
 
 
