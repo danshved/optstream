@@ -277,6 +277,12 @@ tests =
     [ testProperty "MapsSuccess"   prop_fmap_MapsSuccess
     , testProperty "MapsAnyResult" prop_fmap_MapsAnyResult
     ]
+
+  , testGroup "pure"
+    [ testProperty "Matches"    prop_pure_Matches
+    , testProperty "Finishes"   prop_pure_Finishes
+    , testProperty "NotMatches" prop_pure_NotMatches
+    ]
   ]
 
 
@@ -1136,6 +1142,19 @@ prop_fmap_MapsAnyResult builder (AnyArgs as) (Fun _ (f :: String -> String)) =
   runParser (fmap f p) as === fmap f (runParser p as)
   where
     p = parser $ buildGenericExample builder
+
+
+-- * Tests for Applicative
+
+prop_pure_Matches (x :: Int) =
+  runParser (pure x) [] === Right x
+
+prop_pure_Finishes (x :: Int) (AnyArgs as) =
+  runParser (pure x *> args) as === Right as
+
+prop_pure_NotMatches (x :: Int) (AnyArgs as) =
+  not (null as) ==>
+  isLeft' $ runParser (pure x) as
 
 
 -- TODO: Test parse failures for *Char and *Read.
