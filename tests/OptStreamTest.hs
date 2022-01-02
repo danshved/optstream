@@ -317,6 +317,13 @@ tests =
     , testProperty "Skips"  prop_eof_Skips
     , testProperty "OrElse" prop_eof_OrElse
     ]
+
+  , testGroup "parallel"
+    [ testProperty "DirectOrder"     prop_parallel_DirectOrder
+    , testProperty "ReverseOrder"    prop_parallel_ReverseOrder
+    , testProperty "DirectOrderFar"  prop_parallel_DirectOrderFar
+    , testProperty "ReverseOrderFar" prop_parallel_ReverseOrderFar
+    ]
   ]
 
 
@@ -803,7 +810,7 @@ prop_eject_Matches b1 b2 =
 -- TODO: Also check that 'eject' can eject in the middle of a parse.
 
 prop_eject_Ejects b1 b2 (AnyArgs ys) =
-  disjoint (consumes ex1) (consumes ex2) ==>
+  consumes ex1 `disjoint` consumes ex2 ==>
   runParser (eject (parser ex1) (parser ex2)) (inputs ex2 ++ ys)
   === (Right . Left $ result ex2)
   where
@@ -1267,7 +1274,7 @@ prop_alternative_MatchesFirst b1 b2 =
 -- requirement: parser ex1 shouldn't finish immediately, and also one of the
 -- parsers shouldn't accept EOF.
 prop_alternative_MatchesSecond b1 b2 =
-  (consumes ex1 `disjoint` consumes ex2) ==>
+  consumes ex1 `disjoint` consumes ex2 ==>
   runParser (parser ex1 <|> parser ex2) (inputs ex2) === Right (result ex2)
   where
     ex1 = buildGenericExample b1
@@ -1297,13 +1304,62 @@ prop_eof_OrElse =
   runParser (eof $> True <|> orElse False) [] === Right True
 
 
+-- TODO: make this fail by improving GenericExample. Then fix by requiring that
+-- the consumed languages be disjoined. Right now this should fail if e.g.  ex1
+-- is 'many x' and ex2 is 'x'.
+prop_parallel_DirectOrder b1 b2 =
+  runParser ((,) <$> parser ex1 <#> parser ex2) (inputs ex1 ++ inputs ex2)
+  === Right (result ex1, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_parallel_ReverseOrder b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  runParser ((,) <$> parser ex1 <#> parser ex2) (inputs ex2 ++ inputs ex1)
+  === Right (result ex1, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_parallel_DirectOrderFar b1 b2 (AnyArgs as) =
+  not (any (`member` c2) as) ==>
+  runParser (((,,) <$> p1 <#> p2) <#> args) (i1 ++ as ++ i2)
+  === Right (r1, r2, as)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+    r1 = result ex1
+    r2 = result ex2
+    c2 = consumes ex2
+
+prop_parallel_ReverseOrderFar b1 b2 (AnyArgs as) =
+  c1 `disjoint` c2 && not (any (`member` c1) as) ==>
+  runParser (((,,) <$> p1 <#> p2) <#> args) (i2 ++ as ++ i1)
+  === Right (r1, r2, as)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+    r1 = result ex1
+    r2 = result ex2
+    c1 = consumes ex1
+    c2 = consumes ex2
+
+-- TODO: add more tests for <#>, e.g. Mixture.
+
+
+
 
 
 
 
 -- TODO: Test parse failures for *Char and *Read.
 -- TODO: Test that withHelp et al. can interrupt a parse in the middle.
-
--- TODO: (?) test that atomic option parsers can be matched in any order with
---       <#> as long as they have non-intersecting sets of option forms. Also
---       check that free arguments can be squished in arbitrarily between them.
