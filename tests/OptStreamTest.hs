@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Control.Applicative hiding (some, many, optional)
@@ -270,6 +271,11 @@ tests =
     [ testProperty "MatchesMain"    prop_withVersionIO'_MatchesMain
     , testProperty "MatchesVersion" prop_withVersionIO'_MatchesVersion
     , testProperty "AddsNoHelp"     prop_withVersionIO'_AddsNoHelp
+    ]
+
+  , testGroup "fmap"
+    [ testProperty "MapsSuccess"   prop_fmap_MapsSuccess
+    , testProperty "MapsAnyResult" prop_fmap_MapsAnyResult
     ]
   ]
 
@@ -1115,6 +1121,21 @@ prop_withVersionIO'_AddsNoHelp s builder =
   getHelp (withVersionIO' s $ parser ex) === getHelp (parser ex)
   where
     ex = buildGenericIOExample builder
+
+
+-- * Tests for Functor
+
+prop_fmap_MapsSuccess builder (Fun _ (f :: String -> String)) =
+  runParser (fmap f p) as === fmap f (runParser p as)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+    as = inputs ex
+
+prop_fmap_MapsAnyResult builder (AnyArgs as) (Fun _ (f :: String -> String)) =
+  runParser (fmap f p) as === fmap f (runParser p as)
+  where
+    p = parser $ buildGenericExample builder
 
 
 -- TODO: Test parse failures for *Char and *Read.
