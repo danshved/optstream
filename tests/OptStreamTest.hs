@@ -294,6 +294,9 @@ tests =
     [ testProperty "Matches"    prop_ap_Matches
     , testProperty "MatchesFar" prop_ap_MatchesFar
     ]
+
+  , testGroup "failA"
+    [ testProperty "Fails" prop_failA_fails ]
   ]
 
 
@@ -1177,15 +1180,16 @@ prop_fmapOrFail_MapsAnyToFailure builder s (AnyArgs as)=
     func _ = (Left s) :: Either String String
 
 
+
 -- * Tests for Applicative
 
 prop_pure_Matches (x :: Int) =
   runParser (pure x) [] === Right x
 
-prop_pure_Finishes (x :: Int) (AnyArgs as) =
+prop_pure_Finishes (x :: String) (AnyArgs as) =
   runParser (pure x *> args) as === Right as
 
-prop_pure_NotMatches (x :: Int) (AnyArgs as) =
+prop_pure_NotMatches (x :: String) (AnyArgs as) =
   not (null as) ==>
   isLeft' $ runParser (pure x) as
 
@@ -1212,6 +1216,13 @@ prop_ap_MatchesFar b1 b2 (AnyArgs as) =
     r1 = result ex1
     r2 = result ex2
     c2 = consumes ex2
+
+
+
+-- * Tests for ApplicativeFail
+
+prop_failA_fails s (AnyArgs as) =
+  isLeft' $ runParser (failA s :: Parser String) as
 
 
 -- TODO: Test parse failures for *Char and *Read.
