@@ -304,6 +304,13 @@ tests =
     [ testProperty "Fails"  prop_empty_Fails
     , testProperty "OrElse" prop_empty_OrElse
     ]
+
+  , testGroup "alternative"
+    [ testProperty "MatchesFirst"  prop_alternative_MatchesFirst
+    , testProperty "MatchesSecond" prop_alternative_MatchesSecond
+    , testProperty "LeftEmpty"     prop_alternative_LeftEmpty
+    , testProperty "RightEmpty"    prop_alternative_RightEmpty
+    ]
   ]
 
 
@@ -1242,6 +1249,34 @@ prop_empty_Fails (AnyArgs as) =
 
 prop_empty_OrElse (x :: String) =
   runParser (empty <|> orElse x) [] === Right x
+
+
+prop_alternative_MatchesFirst b1 b2 =
+  runParser (parser ex1 <|> parser ex2) (inputs ex1) === Right (result ex1)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+-- TODO: make this fail by improving GenericExample. Then add missing
+-- requirement: parser ex1 shouldn't finish immediately, and also one of the
+-- parsers shouldn't accept EOF.
+prop_alternative_MatchesSecond b1 b2 =
+  (consumes ex1 `disjoint` consumes ex2) ==>
+  runParser (parser ex1 <|> parser ex2) (inputs ex2) === Right (result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_alternative_LeftEmpty builder =
+  runParser (empty <|> parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_alternative_RightEmpty builder =
+  runParser (parser ex <|> empty) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
 
 
 
