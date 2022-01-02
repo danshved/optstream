@@ -278,6 +278,12 @@ tests =
     , testProperty "MapsAnyResult" prop_fmap_MapsAnyResult
     ]
 
+  , testGroup "fmapOrFail"
+    [ testProperty "MapsSuccess"          prop_fmapOrFail_MapsSuccess
+    , testProperty "MapsSuccessToFailure" prop_fmapOrFail_MapsSuccessToFailure
+    , testProperty "MapsAnyToFailure"     prop_fmapOrFail_MapsAnyToFailure
+    ]
+
   , testGroup "pure"
     [ testProperty "Matches"    prop_pure_Matches
     , testProperty "Finishes"   prop_pure_Finishes
@@ -1147,6 +1153,28 @@ prop_fmap_MapsAnyResult builder (AnyArgs as) (Fun _ (f :: String -> String)) =
   runParser (fmap f p) as === fmap f (runParser p as)
   where
     p = parser $ buildGenericExample builder
+
+
+-- * Tests for FunctorFail
+
+prop_fmapOrFail_MapsSuccess builder (Fun _ (f :: String -> String)) =
+  runParser (fmapOrFail (Right . f) p) as === fmap f (runParser p as)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+    as = inputs ex
+
+prop_fmapOrFail_MapsSuccessToFailure builder s =
+  isLeft' $ runParser (fmapOrFail func (parser ex)) (inputs ex)
+  where
+    ex = buildGenericExample builder
+    func _ = (Left s) :: Either String String
+
+prop_fmapOrFail_MapsAnyToFailure builder s (AnyArgs as)=
+  isLeft' $ runParser (fmapOrFail func (parser ex)) as
+  where
+    ex = buildGenericExample builder
+    func _ = (Left s) :: Either String String
 
 
 -- * Tests for Applicative
