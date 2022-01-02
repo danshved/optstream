@@ -14,7 +14,7 @@ import Test.QuickCheck
 import Options.OptStream
 import Options.OptStream.Help
 import Options.OptStream.IOOps
-import Options.OptStream.Test.Helpers hiding (null)
+import Options.OptStream.Test.Helpers hiding (null, empty)
 import Options.OptStream.Test.TestIO hiding (args)
 
 main :: IO ()
@@ -296,7 +296,14 @@ tests =
     ]
 
   , testGroup "failA"
-    [ testProperty "Fails" prop_failA_fails ]
+    [ testProperty "Fails"  prop_failA_Fails
+    , testProperty "OrElse" prop_failA_OrElse
+    ]
+
+  , testGroup "empty"
+    [ testProperty "Fails"  prop_empty_Fails
+    , testProperty "OrElse" prop_empty_OrElse
+    ]
   ]
 
 
@@ -1221,8 +1228,21 @@ prop_ap_MatchesFar b1 b2 (AnyArgs as) =
 
 -- * Tests for ApplicativeFail
 
-prop_failA_fails s (AnyArgs as) =
+prop_failA_Fails s (AnyArgs as) =
   isLeft' $ runParser (failA s :: Parser String) as
+
+prop_failA_OrElse s (x :: String) =
+  isLeft' $ runParser (failA s <|> orElse x) []
+
+
+-- * Test for Alternative
+
+prop_empty_Fails (AnyArgs as) =
+  isLeft' $ runParser (empty :: Parser String) as
+
+prop_empty_OrElse (x :: String) =
+  runParser (empty <|> orElse x) [] === Right x
+
 
 
 -- TODO: Test parse failures for *Char and *Read.
