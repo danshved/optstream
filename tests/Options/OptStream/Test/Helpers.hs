@@ -501,9 +501,10 @@ isFree _ = True
 data Example a = Example
   { parser :: Parser a
     -- ^ Parser under test.
-  , inputs :: [String]
+  , blocks :: [[String]]
     -- ^ Example sequence of input arguments that the parser should
-    -- successfully consume.
+    -- successfully consume. Split into separate blocks, each block being an
+    -- argument possibly followed by more arguments consumed by a 'Follower'.
   , result :: a
     -- ^ The value that the parser should produce.
   , consumes :: ArgLanguage
@@ -515,11 +516,13 @@ data Example a = Example
 instance Functor Example where
   fmap f (Example p i r c) = Example (fmap f p) i (f r) c
 
+inputs :: Example a -> [String]
+inputs = concat . blocks
 
 buildMatchExample :: String -> Example String
 buildMatchExample s = Example
   { parser = match s
-  , inputs = [s]
+  , blocks = [[s]]
   , result = s
   , consumes = singleton s
   }
@@ -527,7 +530,7 @@ buildMatchExample s = Example
 buildMatchShortExample :: Char -> Example Char
 buildMatchShortExample c = Example
   { parser = matchShort c
-  , inputs = [['-', c]]
+  , blocks = [[['-', c]]]
   , result = c
   , consumes = singleton ['-', c]
   }
@@ -545,7 +548,7 @@ buildMAFExample :: MAFExample -> Example [String]
 buildMAFExample (MAFExample s pairs)
   = Example
   { parser = matchAndFollow s follower
-  , inputs = s:xs
+  , blocks = [s:xs]
   , result = xs
   , consumes = singleton s
   }
@@ -566,7 +569,7 @@ buildFlagExample :: FlagExample -> Example ()
 buildFlagExample (FlagExample help bundling fs)
   = Example
   { parser = mkFlag help bundling (allForms fs)
-  , inputs = [chosenForm fs]
+  , blocks = [[chosenForm fs]]
   , result = ()
   , consumes = mconcat . map singleton $ allForms fs
   }
@@ -617,7 +620,7 @@ buildParamExample :: ParamExample -> Example String
 buildParamExample (ParamExample help fs metavar val)
   = Example
   { parser = mkParam help (valueType val) forms metavar
-  , inputs = [chosenForm fs, x]
+  , blocks = [[chosenForm fs, x]]
   , result = x
   , consumes = mconcat $ map withPrefix forms
   }
@@ -628,11 +631,11 @@ buildParamExample (ParamExample help fs metavar val)
 buildParamExample
   (ParamShortExample help (ChosenShort fs) metavar (NonEmptyValue val))
   = (buildParamExample $ ParamExample help fs metavar val)
-  { inputs = [chosenForm fs ++ formatValue val] }
+  { blocks = [[chosenForm fs ++ formatValue val]] }
 
 buildParamExample (ParamLongExample help (ChosenLong fs) metavar val)
   = (buildParamExample $ ParamExample help fs metavar val)
-  { inputs = [chosenForm fs ++ "=" ++ formatValue val] }
+  { blocks = [[chosenForm fs ++ "=" ++ formatValue val]] }
 
 
 -- | Represents an example where a @freeArg*@ parser should match a specific
@@ -648,7 +651,7 @@ buildFreeArgExample :: FreeArgExample -> Example String
 buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
   = Example
   { parser = mkFreeArg help (valueType val) metavar
-  , inputs = [x]
+  , blocks = [[x]]
   , result = x
   , consumes = freeArgs
   }
@@ -674,7 +677,7 @@ buildMultiParamExample :: MultiParamExample -> Example [String]
 buildMultiParamExample (MultiParamExample helpChoice fs pairs)
   = Example
   { parser = mkMultiParam helpChoice (allForms fs) f
-  , inputs = chosenForm fs:xs
+  , blocks = [chosenForm fs:xs]
   , result = xs
   , consumes = mconcat . map singleton $ allForms fs
   }
@@ -789,7 +792,7 @@ buildGenericExample (GenericAtomic x) = buildAtomicExample x
 buildGenericExample (GenericAp x y)
   = Example
   { parser = (++) <$> parser ex1 <*> parser ex2
-  , inputs = inputs ex1 ++ inputs ex2
+  , blocks = blocks ex1 ++ blocks ex2
   , result = result ex1 ++ result ex2
   , consumes = consumes ex1 `union` consumes ex2
   }
