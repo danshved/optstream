@@ -1305,7 +1305,7 @@ prop_eof_OrElse =
 
 
 -- TODO: make this fail by improving GenericExample. Then fix by requiring that
--- the consumed languages be disjoined. Right now this should fail if e.g.  ex1
+-- the consumed languages be disjoint. Right now this should fail if e.g.  ex1
 -- is 'many x' and ex2 is 'x'.
 prop_parallel_DirectOrder b1 b2 =
   runParser ((,) <$> parser ex1 <#> parser ex2) (inputs ex1 ++ inputs ex2)

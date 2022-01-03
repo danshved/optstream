@@ -121,6 +121,14 @@ throwsError a = ioProperty $ isErrorCall <$> try (evaluate a)
     isErrorCall :: Either ErrorCall a -> Bool
     isErrorCall = isLeft
 
+-- | Mix two lists, preserving the original order of both.
+mix :: [a] -> [a] -> Gen [a]
+mix as bs = construct as bs <$> shuffle ((as $> False) ++ (bs $> True))
+  where
+    construct [] [] [] = []
+    construct (a:as) bs (False:xs) = a:construct as bs xs
+    construct as (b:bs) (True:xs) = b:construct as bs xs
+
 
 
 -- * Helpers for TestIO
