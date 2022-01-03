@@ -323,6 +323,7 @@ tests =
     , testProperty "ReverseOrder"    prop_parallel_ReverseOrder
     , testProperty "DirectOrderFar"  prop_parallel_DirectOrderFar
     , testProperty "ReverseOrderFar" prop_parallel_ReverseOrderFar
+    , testProperty "Mix"             prop_parallel_Mix
     ]
   ]
 
@@ -1353,12 +1354,14 @@ prop_parallel_ReverseOrderFar b1 b2 (AnyArgs as) =
     c1 = consumes ex1
     c2 = consumes ex2
 
--- TODO: add more tests for <#>, e.g. Mixture.
-
-
-
-
-
+prop_parallel_Mix b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  forAll (concat <$> mix (blocks ex1) (blocks ex2)) $ \inputs ->
+    runParser ((,) <$> parser ex1 <#> parser ex2) inputs
+    === Right (result ex1, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
 
 
 -- TODO: Test parse failures for *Char and *Read.
