@@ -754,13 +754,40 @@ buildAtomicExample (AtomicParam x) = buildParamExample x
 buildAtomicExample (AtomicFreeArg x) = buildFreeArgExample x
 buildAtomicExample (AtomicMultiParam x) = concat <$> buildMultiParamExample x
 
-
+-- TODO: include pure in generic examples.
+-- TODO: include eof in generic examples.
 -- | Represents a generic 'Parser' for testing, together with an example input
 -- for a successful parse.
-type GenericExample = AtomicExample
+data GenericExample
+ = GenericAtomic AtomicExample
+ | GenericAp AtomicExample GenericExample
+ deriving (Show, Generic)
+
+genericToAtomic :: GenericExample -> [AtomicExample]
+genericToAtomic (GenericAp x _) = [x]
+genericToAtomic _ = []
+
+instance Arbitrary GenericExample where
+  arbitrary = oneof
+    [ GenericAtomic <$> arbitrary
+    , GenericAp <$> arbitrary <*> arbitrary
+    ]
+
+  shrink e = (map GenericAtomic $ genericToAtomic e)
+    ++ genericShrink e
 
 buildGenericExample :: GenericExample -> Example String
-buildGenericExample = buildAtomicExample
+buildGenericExample (GenericAtomic x) = buildAtomicExample x
+buildGenericExample (GenericAp x y)
+  = Example
+  { parser = (++) <$> parser ex1 <*> parser ex2
+  , inputs = inputs ex1 ++ inputs ex2
+  , result = result ex1 ++ result ex2
+  , consumes = consumes ex1 `union` consumes ex2
+  }
+  where
+    ex1 = buildAtomicExample x
+    ex2 = buildGenericExample y
 
 
 -- | Represents a generic IO-style parser for testing, together with an example
