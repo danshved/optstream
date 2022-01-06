@@ -340,6 +340,14 @@ tests =
     , testProperty "ReverseOrderFar" prop_parallel_ReverseOrderFar
     , testProperty "Mix"             prop_parallel_Mix
     ]
+
+  , testGroup "leftParallel"
+    [ testProperty "Matches"              prop_leftParallel_Matches
+    , testProperty "NotMatchesReverse"    prop_leftParallel_NotMatchesReverse
+    , testProperty "MatchesInterrupting"  prop_leftParallel_MatchesInterrupting
+    , testProperty "FinishesInterrupting" prop_leftParallel_FinishesInterrupting
+    , testProperty "JoinsHelp"            prop_leftParallel_JoinsHelp
+    ]
   ]
 
 
@@ -1464,6 +1472,52 @@ prop_parallel_Mix b1 b2 =
 
 prop_parallel_JoinsHelp b1 b2 =
   getHelp ((,) <$> p1 <#> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
+
+
+prop_leftParallel_Matches b1 b2 =
+  runParser ((,) <$> parser ex1 <-#> parser ex2) (inputs ex1 ++ inputs ex2)
+  === Right (result ex1, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_leftParallel_NotMatchesReverse b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  isLeft $ runParser ((,) <$> p1 <-#> p2) (i2 ++ i1)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+
+-- TODO: Make this fail by improving GenericExample (if parser ex1 accepts
+-- EOF).
+prop_leftParallel_MatchesInterrupting b1 b2 x =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  runParser ((,) <$> (parser ex1 <|> orElse x) <-#> parser ex2) (inputs ex2)
+  === Right (x, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_leftParallel_FinishesInterrupting b1 b2 x (AnyArg y) =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  runParser (((,) <$> (p1 <|> orElse x) <-#> p2) *> args) (i2 ++ [y])
+  === Right [y]
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i2 = inputs ex2
+
+prop_leftParallel_JoinsHelp b1 b2 =
+  getHelp ((,) <$> p1 <-#> p2) === getHelp p1 <> getHelp p2
   where
     p1 = parser $ buildGenericExample b1
     p2 = parser $ buildGenericExample b2
