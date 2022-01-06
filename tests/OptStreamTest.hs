@@ -83,6 +83,7 @@ tests =
     , testProperty "Empty"      prop_match_Empty
     , testProperty "OrElse"     prop_match_OrElse
     , testProperty "NotMatches" prop_match_NotMatches
+    , testProperty "NoHelp"     prop_match_NoHelp
     ]
 
   , testGroup "matchAndFollow"
@@ -93,6 +94,7 @@ tests =
     , testProperty "OrElse"     prop_matchAndFollow_OrElse
     , testProperty "NotMatches" prop_matchAndFollow_NotMatches
     , testProperty "NotEnough"  prop_matchAndFollow_NotEnough
+    , testProperty "NoHelp"     prop_matchAndFollow_NoHelp
     ]
 
   , testGroup "matchShort"
@@ -105,30 +107,35 @@ tests =
     , testProperty "OrElse"           prop_matchShort_OrElse
     , testProperty "NotMatches"       prop_matchShort_NotMatches
     , testProperty "MatchesBundle"    prop_matchShort_MatchesBundle
+    , testProperty "NoHelp"           prop_matchShort_NoHelp
     ]
 
   , testGroup "withHelp"
-    [ testProperty "MatchesMain" prop_withHelp_MatchesMain
-    , testProperty "MatchesHelp" prop_withHelp_MatchesHelp
-    , testProperty "AddsHelp"    prop_withHelp_AddsHelp
+    [ testProperty "MatchesMain"       prop_withHelp_MatchesMain
+    , testProperty "MatchesHelp"       prop_withHelp_MatchesHelp
+    , testProperty "MatchesHelpMiddle" prop_withHelp_MatchesHelpMiddle
+    , testProperty "AddsHelp"          prop_withHelp_AddsHelp
     ]
 
   , testGroup "withHelp'"
-    [ testProperty "MatchesMain" prop_withHelp'_MatchesMain
-    , testProperty "MatchesHelp" prop_withHelp'_MatchesHelp
-    , testProperty "AddsNoHelp"  prop_withHelp'_AddsNoHelp
+    [ testProperty "MatchesMain"       prop_withHelp'_MatchesMain
+    , testProperty "MatchesHelp"       prop_withHelp'_MatchesHelp
+    , testProperty "MatchesHelpMiddle" prop_withHelp'_MatchesHelpMiddle
+    , testProperty "AddsNoHelp"        prop_withHelp'_AddsNoHelp
     ]
 
   , testGroup "withSubHelp"
-    [ testProperty "MatchesMain" prop_withSubHelp_MatchesMain
-    , testProperty "MatchesHelp" prop_withSubHelp_MatchesHelp
-    , testProperty "ClearsHelp"  prop_withSubHelp_ClearsHelp
+    [ testProperty "MatchesMain"       prop_withSubHelp_MatchesMain
+    , testProperty "MatchesHelp"       prop_withSubHelp_MatchesHelp
+    , testProperty "MatchesHelpMiddle" prop_withSubHelp_MatchesHelpMiddle
+    , testProperty "ClearsHelp"        prop_withSubHelp_ClearsHelp
     ]
 
   , testGroup "withSubHelp'"
-    [ testProperty "MatchesMain" prop_withSubHelp'_MatchesMain
-    , testProperty "MatchesHelp" prop_withSubHelp'_MatchesHelp
-    , testProperty "ClearsrHelp" prop_withSubHelp'_ClearsHelp
+    [ testProperty "MatchesMain"       prop_withSubHelp'_MatchesMain
+    , testProperty "MatchesHelp"       prop_withSubHelp'_MatchesHelp
+    , testProperty "MatchesHelpMiddle" prop_withSubHelp'_MatchesHelpMiddle
+    , testProperty "ClearsrHelp"       prop_withSubHelp'_ClearsHelp
     ]
 
   , testGroup "withVersion"
@@ -159,6 +166,7 @@ tests =
     [ testProperty "Matches"         prop_eject_Matches
     , testProperty "Ejects"          prop_eject_Ejects
     , testProperty "EjectsAfter"     prop_eject_EjectsAfter
+    , testProperty "EjectsMiddle"    prop_eject_EjectsMiddle
     , testProperty "EjectsLongAfter" prop_eject_EjectsLongAfter
     , testProperty "JoinsHelp"       prop_eject_JoinsHelp
     ]
@@ -276,33 +284,39 @@ tests =
   , testGroup "fmap"
     [ testProperty "MapsSuccess"   prop_fmap_MapsSuccess
     , testProperty "MapsAnyResult" prop_fmap_MapsAnyResult
+    , testProperty "AddsNoHelp"    prop_fmap_AddsNoHelp
     ]
 
   , testGroup "fmapOrFail"
     [ testProperty "MapsSuccess"          prop_fmapOrFail_MapsSuccess
     , testProperty "MapsSuccessToFailure" prop_fmapOrFail_MapsSuccessToFailure
     , testProperty "MapsAnyToFailure"     prop_fmapOrFail_MapsAnyToFailure
+    , testProperty "AddsNoHelp"           prop_fmapOrFail_AddsNoHelp
     ]
 
   , testGroup "pure"
     [ testProperty "Matches"    prop_pure_Matches
     , testProperty "Finishes"   prop_pure_Finishes
     , testProperty "NotMatches" prop_pure_NotMatches
+    , testProperty "NoHelp"     prop_pure_NoHelp
     ]
 
   , testGroup "ap"
     [ testProperty "Matches"    prop_ap_Matches
     , testProperty "MatchesFar" prop_ap_MatchesFar
+    , testProperty "JoinsHelp"  prop_ap_JoinsHelp
     ]
 
   , testGroup "failA"
     [ testProperty "Fails"  prop_failA_Fails
     , testProperty "OrElse" prop_failA_OrElse
+    , testProperty "NoHelp" prop_failA_NoHelp
     ]
 
   , testGroup "empty"
     [ testProperty "Fails"  prop_empty_Fails
     , testProperty "OrElse" prop_empty_OrElse
+    , testProperty "NoHelp" prop_empty_NoHelp
     ]
 
   , testGroup "alternative"
@@ -316,6 +330,7 @@ tests =
     [ testProperty "Empty"  prop_eof_Empty
     , testProperty "Skips"  prop_eof_Skips
     , testProperty "OrElse" prop_eof_OrElse
+    , testProperty "NoHelp" prop_eof_NoHelp
     ]
 
   , testGroup "parallel"
@@ -576,6 +591,9 @@ prop_match_NotMatches (AnyArg s) (AnyArg x) =
   x /= s ==>
   isLeft' $ runParser (match s) [x]
 
+prop_match_NoHelp (AnyArg s) =
+  getHelp (match s) === mempty
+
 
 
 -- * Tests for matchAndFollow
@@ -617,6 +635,9 @@ prop_matchAndFollow_NotEnough (AnyArg s) matches (NonEmpty pairs) =
     ds = [formatValue val | (_, val) <- matches]
     pairs' = [(valueType val, mv) | (mv, val) <- matches] ++ pairs
 
+prop_matchAndFollow_NoHelp (AnyArg s) pairs =
+  getHelp (matchAndFollow s $ mkFollower pairs) === mempty
+
 
 
 -- * Tests for matchShort
@@ -651,6 +672,9 @@ prop_matchShort_MatchesBundle (AnyChars cs) =
   not (null cs) ==>
   runParser (traverse matchShort cs) ['-':cs] === Right cs
 
+prop_matchShort_NoHelp (AnyChar c) =
+  getHelp (matchShort c) === mempty
+
 
 -- * Tests for utilities
 
@@ -662,6 +686,14 @@ prop_withHelp_MatchesMain builder =
 prop_withHelp_MatchesHelp builder =
   not ("--help" `member` consumes ex) ==>
   runParser p ["--help"] === (Right . Left $ getHelp p)
+  where
+    ex = buildGenericExample builder
+    p = withHelp $ parser ex
+
+prop_withHelp_MatchesHelpMiddle builder (AnyArgs ys) =
+  not ("--help" `member` consumes ex) ==>
+  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
+    runParser p (pref ++ ["--help"] ++ ys) === (Right . Left $ getHelp p)
   where
     ex = buildGenericExample builder
     p = withHelp $ parser ex
@@ -680,6 +712,15 @@ prop_withHelp'_MatchesMain builder =
 prop_withHelp'_MatchesHelp builder =
   not ("--help" `member` consumes ex) ==>
   runParser (withHelp' p) ["--help"] === (Right . Left $ getHelp p)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withHelp'_MatchesHelpMiddle builder (AnyArgs ys) =
+  not ("--help" `member` consumes ex) ==>
+  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
+    runParser (withHelp' p) (pref ++ ["--help"] ++ ys)
+    === (Right . Left $ getHelp p)
   where
     ex = buildGenericExample builder
     p = parser ex
@@ -703,6 +744,15 @@ prop_withSubHelp_MatchesHelp builder =
     ex = buildGenericExample builder
     p = parser ex
 
+prop_withSubHelp_MatchesHelpMiddle builder (AnyArgs ys) =
+  not ("--help" `member` consumes ex) ==>
+  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
+    runParser (withSubHelp p) (pref ++ ["--help"] ++ ys)
+    === (Right . Left . getHelp $ withHelp p)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
 prop_withSubHelp_ClearsHelp builder =
   getHelp (withSubHelp $ parser ex) === mempty
   where
@@ -718,6 +768,15 @@ prop_withSubHelp'_MatchesMain builder =
 prop_withSubHelp'_MatchesHelp builder =
   not ("--help" `member` consumes ex) ==>
   runParser (withSubHelp' p) ["--help"] === (Right . Left $ getHelp p)
+  where
+    ex = buildGenericExample builder
+    p = parser ex
+
+prop_withSubHelp'_MatchesHelpMiddle builder (AnyArgs ys) =
+  not ("--help" `member` consumes ex) ==>
+  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
+    runParser (withSubHelp' p) (pref ++ ["--help"] ++ ys)
+    === (Right . Left $ getHelp p)
   where
     ex = buildGenericExample builder
     p = parser ex
@@ -819,15 +878,21 @@ prop_eject_Ejects b1 b2 (AnyArgs ys) =
     ex2 = buildGenericExample b2
 
 prop_eject_EjectsAfter b1 b2 (AnyArgs ys) =
-  runParser (eject p1 p2) (i1 ++ i2 ++ ys) === (Right . Left $ r2)
+  runParser (eject (parser ex1) (parser ex2)) (inputs ex1 ++ inputs ex2 ++ ys)
+  === (Right . Left $ result ex2)
   where
     ex1 = buildGenericExample b1
     ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
-    r2 = result ex2
+
+prop_eject_EjectsMiddle b1 b2 (AnyArgs ys) =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  forAll (concat <$> prefix (blocks ex1)) $ \pref ->
+    runParser (eject (parser ex1) (parser ex2)) (pref ++ inputs ex2 ++ ys)
+    === (Right . Left $ result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
 
 prop_eject_EjectsLongAfter b1 (AnyArgs ys) b2 (AnyArgs zs) =
   not (any (`member` c2) ys) ==>
@@ -1185,6 +1250,11 @@ prop_fmap_MapsAnyResult builder (AnyArgs as) (Fun _ (f :: String -> String)) =
   where
     p = parser $ buildGenericExample builder
 
+prop_fmap_AddsNoHelp builder (Fun _ (f :: String -> String)) =
+  getHelp (fmap f p) === getHelp p
+  where
+    p = parser $ buildGenericExample builder
+
 
 -- * Tests for FunctorFail
 
@@ -1207,11 +1277,16 @@ prop_fmapOrFail_MapsAnyToFailure builder s (AnyArgs as)=
     ex = buildGenericExample builder
     func _ = (Left s) :: Either String String
 
+prop_fmapOrFail_AddsNoHelp builder (Fun _ f) =
+  getHelp (fmapOrFail f p :: Parser String) === getHelp p
+  where
+    p = parser $ buildGenericExample builder
+
 
 
 -- * Tests for Applicative
 
-prop_pure_Matches (x :: Int) =
+prop_pure_Matches (x :: String) =
   runParser (pure x) [] === Right x
 
 prop_pure_Finishes (x :: String) (AnyArgs as) =
@@ -1220,6 +1295,9 @@ prop_pure_Finishes (x :: String) (AnyArgs as) =
 prop_pure_NotMatches (x :: String) (AnyArgs as) =
   not (null as) ==>
   isLeft' $ runParser (pure x) as
+
+prop_pure_NoHelp (x :: String) =
+  getHelp (pure x) === mempty
 
 
 -- TODO: make this test fail by generating better GenericExample. Then fix by
@@ -1245,6 +1323,12 @@ prop_ap_MatchesFar b1 b2 (AnyArgs as) =
     r2 = result ex2
     c2 = consumes ex2
 
+prop_ap_JoinsHelp b1 b2 =
+  getHelp ((,) <$> p1 <*> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
+
 
 
 -- * Tests for ApplicativeFail
@@ -1255,6 +1339,9 @@ prop_failA_Fails s (AnyArgs as) =
 prop_failA_OrElse s (x :: String) =
   isLeft' $ runParser (failA s <|> orElse x) []
 
+prop_failA_NoHelp s =
+  getHelp (failA s :: Parser String) === mempty
+
 
 -- * Test for Alternative
 
@@ -1263,6 +1350,9 @@ prop_empty_Fails (AnyArgs as) =
 
 prop_empty_OrElse (x :: String) =
   runParser (empty <|> orElse x) [] === Right x
+
+prop_empty_NoHelp =
+  getHelp (empty :: Parser String) === mempty
 
 
 prop_alternative_MatchesFirst b1 b2 =
@@ -1291,6 +1381,12 @@ prop_alternative_RightEmpty builder =
   where
     ex = buildGenericExample builder
 
+prop_alternative_JoinsHelp b1 b2 =
+  getHelp (p1 <|> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
+
 
 
 -- * Tests for SubstreamParser
@@ -1303,6 +1399,9 @@ prop_eof_Skips (AnyArgs as) =
 
 prop_eof_OrElse =
   runParser (eof $> True <|> orElse False) [] === Right True
+
+prop_eof_NoHelp =
+  getHelp eof === mempty
 
 
 -- TODO: make this fail by improving GenericExample. Then fix by requiring that
@@ -1363,6 +1462,12 @@ prop_parallel_Mix b1 b2 =
     ex1 = buildGenericExample b1
     ex2 = buildGenericExample b2
 
+prop_parallel_JoinsHelp b1 b2 =
+  getHelp ((,) <$> p1 <#> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
+
 
 -- TODO: Test parse failures for *Char and *Read.
--- TODO: Test that withHelp et al. can interrupt a parse in the middle.
+-- TODO: Test that withVersion* can interrupt a parse in the middle.

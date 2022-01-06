@@ -129,6 +129,12 @@ mix as bs = construct as bs <$> shuffle ((as $> False) ++ (bs $> True))
     construct (a:as) bs (False:xs) = a:construct as bs xs
     construct as (b:bs) (True:xs) = b:construct as bs xs
 
+-- | Take a random prefix of a list.
+prefix :: [a] -> Gen [a]
+prefix as = do
+  l <- choose (0, length as)
+  return $ take l as
+
 
 
 -- * Helpers for TestIO
