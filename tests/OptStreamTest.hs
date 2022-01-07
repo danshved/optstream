@@ -348,6 +348,14 @@ tests =
     , testProperty "FinishesInterrupting" prop_leftParallel_FinishesInterrupting
     , testProperty "JoinsHelp"            prop_leftParallel_JoinsHelp
     ]
+
+  , testGroup "rightParallel"
+    [ testProperty "Matches"              prop_rightParallel_Matches
+    , testProperty "NotMatchesDirect"     prop_rightParallel_NotMatchesDirect
+    , testProperty "MatchesInterrupting"  prop_rightParallel_MatchesInterrupting
+    , testProperty "FinishesInterrupting" prop_rightParallel_FinishesInterrupting
+    , testProperty "JoinsHelp"            prop_rightParallel_JoinsHelp
+    ]
   ]
 
 
@@ -1523,5 +1531,51 @@ prop_leftParallel_JoinsHelp b1 b2 =
     p2 = parser $ buildGenericExample b2
 
 
+prop_rightParallel_Matches b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  runParser ((,) <$> parser ex1 <#-> parser ex2) (inputs ex2 ++ inputs ex1)
+  === Right (result ex1, result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+-- TODO: make this fail by improving GenericExample (if ex2 accepts EOF).
+prop_rightParallel_NotMatchesDirect b1 b2 =
+  isLeft $ runParser ((,) <$> p1 <#-> p2) (i1 ++ i2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+    i2 = inputs ex2
+
+prop_rightParallel_MatchesInterrupting b1 b2 x =
+  runParser ((,) <$> parser ex1 <#-> (parser ex2 <|> orElse x)) (inputs ex1)
+  === Right (result ex1, x)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_rightParallel_FinishesInterrupting b1 b2 x (AnyArg y) =
+  runParser (((,) <$> p1 <#-> (p2 <|> orElse x)) *> args) (i1 ++ [y])
+  === Right [y]
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+    p1 = parser ex1
+    p2 = parser ex2
+    i1 = inputs ex1
+
+prop_rightParallel_JoinsHelp b1 b2 =
+  getHelp ((,) <$> p1 <#-> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
+
+
+
+-- TODO: Try refactoring examples so that Example pieces are pattern-matched,
+-- like it is done for 'Fun'.
 -- TODO: Test parse failures for *Char and *Read.
 -- TODO: Test that withVersion* can interrupt a parse in the middle.
