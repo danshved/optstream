@@ -135,6 +135,14 @@ prefix as = do
   l <- choose (0, length as)
   return $ take l as
 
+-- | Take a random prefix of a list that doesn't coincide with the full list.
+-- Will throw an 'error' if the list is empty.
+properPrefix :: [a] -> Gen [a]
+properPrefix [] = error "properPrefix of an empty list"
+properPrefix as = do
+  l <- choose (0, length as - 1)
+  return $ take l as
+
 
 
 -- * Helpers for TestIO

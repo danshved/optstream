@@ -324,6 +324,25 @@ tests =
     , testProperty "MatchesSecond" prop_alternative_MatchesSecond
     , testProperty "LeftEmpty"     prop_alternative_LeftEmpty
     , testProperty "RightEmpty"    prop_alternative_RightEmpty
+    , testProperty "JoinsHelp"     prop_alternative_JoinsHelp
+    ]
+
+  , testGroup "leftAlternative"
+    [ testProperty "MatchesFirst"  prop_leftAlternative_MatchesFirst
+    , testProperty "MatchesSecond" prop_leftAlternative_MatchesSecond
+    , testProperty "MatchesMiddle" prop_leftAlternative_MatchesMiddle
+    , testProperty "LeftEmpty"     prop_leftAlternative_LeftEmpty
+    , testProperty "RightEmpty"    prop_leftAlternative_RightEmpty
+    , testProperty "JoinsHelp"     prop_leftAlternative_JoinsHelp
+    ]
+
+  , testGroup "rightAlternative"
+    [ testProperty "MatchesFirst"  prop_rightAlternative_MatchesFirst
+    , testProperty "MatchesSecond" prop_rightAlternative_MatchesSecond
+    , testProperty "MatchesMiddle" prop_rightAlternative_MatchesMiddle
+    , testProperty "LeftEmpty"     prop_rightAlternative_LeftEmpty
+    , testProperty "RightEmpty"    prop_rightAlternative_RightEmpty
+    , testProperty "JoinsHelp"     prop_rightAlternative_JoinsHelp
     ]
 
   , testGroup "eof"
@@ -909,7 +928,6 @@ prop_eject_EjectsMiddle b1 b2 (AnyArgs ys) =
     ex1 = buildGenericExample b1
     ex2 = buildGenericExample b2
 
-
 prop_eject_EjectsLongAfter b1 (AnyArgs ys) b2 (AnyArgs zs) =
   not (any (`member` c2) ys) ==>
   runParser ((,) <$> eject p1 p2 <#> args) (i1 ++ ys ++ i2 ++ zs)
@@ -1359,7 +1377,7 @@ prop_failA_NoHelp s =
   getHelp (failA s :: Parser String) === mempty
 
 
--- * Test for Alternative
+-- * Test for Alternative and co.
 
 prop_empty_Fails (AnyArgs as) =
   isLeft' $ runParser (empty :: Parser String) as
@@ -1403,6 +1421,83 @@ prop_alternative_JoinsHelp b1 b2 =
     p1 = parser $ buildGenericExample b1
     p2 = parser $ buildGenericExample b2
 
+
+prop_leftAlternative_MatchesFirst b1 b2 =
+  runParser (parser ex1 <-|> parser ex2) (inputs ex1) === Right (result ex1)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_leftAlternative_MatchesSecond b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  runParser (parser ex1 <-|> parser ex2) (inputs ex2) === Right (result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_leftAlternative_MatchesMiddle b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 && (not . null $ blocks ex1) ==>
+  forAll (concat <$> properPrefix (blocks ex1)) $ \pref ->
+    runParser (parser ex1 <-|> parser ex2) (pref ++ inputs ex2)
+    === Right (result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_leftAlternative_LeftEmpty builder =
+  runParser (empty <-|> parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_leftAlternative_RightEmpty builder =
+  runParser (parser ex <-|> empty) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_leftAlternative_JoinsHelp b1 b2 =
+  getHelp (p1 <-|> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
+
+
+prop_rightAlternative_MatchesFirst b1 b2 =
+  runParser (parser ex1 <|-> parser ex2) (inputs ex1) === Right (result ex1)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_rightAlternative_MatchesSecond b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 ==>
+  runParser (parser ex1 <|-> parser ex2) (inputs ex2) === Right (result ex2)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_rightAlternative_MatchesMiddle b1 b2 =
+  consumes ex1 `disjoint` consumes ex2 && (not . null $ blocks ex2) ==>
+  forAll (concat <$> properPrefix (blocks ex2)) $ \pref ->
+    runParser (parser ex1 <|-> parser ex2) (pref ++ inputs ex1)
+    === Right (result ex1)
+  where
+    ex1 = buildGenericExample b1
+    ex2 = buildGenericExample b2
+
+prop_rightAlternative_LeftEmpty builder =
+  runParser (empty <|-> parser ex) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_rightAlternative_RightEmpty builder =
+  runParser (parser ex <|-> empty) (inputs ex) === Right (result ex)
+  where
+    ex = buildGenericExample builder
+
+prop_rightAlternative_JoinsHelp b1 b2 =
+  getHelp (p1 <|-> p2) === getHelp p1 <> getHelp p2
+  where
+    p1 = parser $ buildGenericExample b1
+    p2 = parser $ buildGenericExample b2
 
 
 -- * Tests for SubstreamParser
