@@ -1,5 +1,5 @@
 {-|
-Module      : Options.OptStream.Raw
+Module      : Options.OptStream.IOOps
 Copyright   : (c) Dan Shved, 2022
 License     : BSD-3
 Maintainer  : danshved@gmail.com

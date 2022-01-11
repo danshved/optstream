@@ -1,3 +1,14 @@
+{-|
+Module      : Options.OptStream.Test.TestIO
+Copyright   : (c) Dan Shved, 2022
+License     : BSD-3
+Maintainer  : danshved@gmail.com
+Stability   : experimental
+
+Mock implementation of 'IOOps', used to test IO-related parts of
+"Options.OptStream".
+-}
+
 {-# LANGUAGE DeriveGeneric #-}
 module Options.OptStream.Test.TestIO where
 

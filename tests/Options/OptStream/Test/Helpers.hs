@@ -1,3 +1,15 @@
+{-|
+Module      : Options.OptStream.Test.Helpers
+Copyright   : (c) Dan Shved, 2022
+License     : BSD-3
+Maintainer  : danshved@gmail.com
+Stability   : experimental
+
+Various helpers for testing "Options.OptStream" with QuickCheck. Contains
+multiple 'Arbitrary' instances that generate 'Parser' objects and corresponding
+command line examples for them to parse.
+-}
+
 {-# LANGUAGE DeriveGeneric #-}
 module Options.OptStream.Test.Helpers where
 

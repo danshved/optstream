@@ -1,3 +1,13 @@
+{-|
+Module      : Main
+Copyright   : (c) Dan Shved, 2022
+License     : BSD-3
+Maintainer  : danshved@gmail.com
+Stability   : experimental
+
+QuickCheck tests for "Options.OptStream".
+-}
+
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
