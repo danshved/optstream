@@ -9,8 +9,8 @@ homepage:            https://github.com/danshved/optstream
 license:             BSD3
 license-file:        LICENSE
 author:              Dan Shved <danshved@gmail.com>
-maintainer:          Dan Shved <danshved@gmail.com>
--- copyright:
+maintainer:          danshved@gmail.com
+copyright:           (c) 2022 Dan Shved
 -- category:
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
