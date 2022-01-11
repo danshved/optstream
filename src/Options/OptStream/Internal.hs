@@ -1,6 +1,6 @@
 {-|
 Module      : Options.OptStream.Internal
-Copyright   : (c) Dan Shved, 2021
+Copyright   : (c) Dan Shved, 2022
 License     : BSD-3
 Maintainer  : danshved@gmail.com
 Stability   : experimental
