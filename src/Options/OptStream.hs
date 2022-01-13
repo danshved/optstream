@@ -384,7 +384,7 @@ instance SubstreamParser Parser where
   (<|->) = lift2 (<|->)
   many = lift1 many
   some = lift1 some
-  between min max = lift1 $ between min max
+  between low high = lift1 $ between low high
   perm xs = Parser (perm $ map toRaw xs) (foldMap getHelp xs)
 
 
@@ -1188,7 +1188,7 @@ beforeDashes = lift1 R.beforeDashes
 
 -- | Modifies the 'Help' object stored in a 'Parser' using a given function.
 modifyHelp :: (Help -> Help) -> Parser a -> Parser a
-modifyHelp mod pa = pa { getHelp = mod $ getHelp pa }
+modifyHelp f pa = pa { getHelp = f $ getHelp pa }
 
 -- | Replaces the 'Help' object stored in a 'Parser' with another one.
 setHelp :: Help -> Parser a -> Parser a

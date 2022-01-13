@@ -39,3 +39,10 @@ test-suite optstream-test
                        QuickCheck >=2.2,
                        test-framework,
                        test-framework-quickcheck2
+
+-- TODO: version
+-- TODO: description
+-- TODO: category
+-- TODO: bug reports
+-- TODO: versions of dependencies (both upper and lower bounds), including the test suite.
+-- TODO: make -Wall clean

@@ -73,7 +73,7 @@ data Option = Short Char | Long String
 parseOptionForm_ :: OptionForm -> Maybe Option
 parseOptionForm_ ('-':c:[]) | c /= '-' = Just $ Short c
 parseOptionForm_ ('-':'-':s@(_:_)) = Just $ Long s
-parseOptionForm_ s@_ = Nothing
+parseOptionForm_ _ = Nothing
 
 -- | Checks whether the given string is a legal option form. A legal short form
 -- is @-C@, where @C@ is any character other than @-@. A legal long form is

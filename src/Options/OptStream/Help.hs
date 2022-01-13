@@ -32,10 +32,8 @@ import Data.Foldable
 import Data.Function
 import Data.List
 import Data.Maybe
-import Data.Monoid
-import Data.Ord
 
-import Options.OptStream.Internal hiding (many)
+import Options.OptStream.Internal
 import qualified Options.OptStream.Internal as I
 
 -- One row in the --help table.
@@ -302,7 +300,7 @@ formatOptionHelp hs = concat . intersperse "\n" $ outputs where
     where
       (d, ds) = case lines desc of
         [] -> ("", [])
-        (d:ds) -> (d, ds)
+        (l:ls) -> (l, ls)
 
   outputs = concatMap getOutputStrs pairs
 
@@ -328,7 +326,7 @@ formatHelp h = concat . intersperse "\n\n" $ concat
   [ toList $ helpHeader h
   , case toList $ helpTable h of
       [] -> []
-      hs -> [formatOptionHelp . toList $ helpTable h]
+      _ -> [formatOptionHelp . toList $ helpTable h]
   , toList $ helpFooter h
   ]
 

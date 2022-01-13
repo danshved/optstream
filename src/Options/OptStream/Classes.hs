@@ -39,7 +39,6 @@ module Options.OptStream.Classes
 where
 
 import Control.Applicative hiding (some, many)
-import Control.Arrow
 import Data.Functor
 
 
@@ -292,13 +291,13 @@ class Alternative p => SubstreamParser p where
              -- ^ Upper bound (u).
           -> p a
           -> p [a]
-  between min max pa
-    | 0 > min = error "between: min is negative"
-    | min > max = error "between: min > max"
-    | otherwise = build min max where
+  between low high pa
+    | 0 > low = error "between: low is negative"
+    | low > high = error "between: low > high"
+    | otherwise = build low high where
       build 0 0 = pure []
       build 0 n = (:) <$> pa <*> build 0 (n - 1) <|> orElse []
-      build min max = (:) <$> pa <*> build (min - 1) (max - 1)
+      build l h = (:) <$> pa <*> build (l - 1) (h - 1)
 
   -- | Permutation. Will try to parse one item by each of the given parsers, in
   -- any order.

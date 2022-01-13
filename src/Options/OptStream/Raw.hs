@@ -62,12 +62,10 @@ where
 
 import Control.Applicative hiding (some, many)
 import Control.Monad
-import Data.Char
 import Data.Foldable
 import Data.Functor
 import Data.List
 import Data.Maybe
-import Data.Monoid
 import Text.Read
 
 import Options.OptStream.Classes
@@ -172,8 +170,8 @@ runFollower :: Context
           -> Either FollowerError (Context, a, [String])
 runFollower ctx (FollowerDone (Right a)) ss = Right (ctx, a, ss)
 runFollower ctx (FollowerDone (Left e)) _ = Left $ FollowerCustomError ctx e
-runFollower ctx (FollowerNext v f) [] = Left $ FollowerMissingArg v
-runFollower ctx (FollowerNext _ f) (s:ss) = runFollower (CtxArg s) (f s) ss
+runFollower _   (FollowerNext v _) [] = Left $ FollowerMissingArg v
+runFollower _   (FollowerNext _ f) (s:ss) = runFollower (CtxArg s) (f s) ss
 
 instance Functor RawFollower where
   fmap = liftM
@@ -284,8 +282,8 @@ runShorts :: String
 runShorts arg = doRun where
   doRun ctx pa [] = Right (ctx, pa)
   doRun ctx (Done (Left e)) (_:_) = Left $ SEDoneError ctx e
-  doRun ctx (Done (Right _)) (c:_) = Left $ SEUnexpectedChar c
-  doRun ctx (Scan _ _ shortH) (c:cs) = case shortH c of
+  doRun _   (Done (Right _)) (c:_) = Left $ SEUnexpectedChar c
+  doRun _   (Scan _ _ shortH) (c:cs) = case shortH c of
     Just pa' -> doRun (CtxShort arg c) pa' cs
     Nothing -> Left $ SEUnexpectedChar c
 
@@ -303,12 +301,12 @@ toParserError ctx (DECustomError msg) = CustomError ctx msg
 runParser :: RawParser a -> [String] -> Either ParserError a
 runParser = doRun CtxStart where
   doRun ctx (Done (Left e)) _ = Left $ toParserError ctx e
-  doRun ctx (Done (Right a)) [] = Right $ a
-  doRun ctx (Done (Right _)) (s:_) = Left $ UnexpectedArg s
+  doRun _   (Done (Right a)) [] = Right $ a
+  doRun _   (Done (Right _)) (s:_) = Left $ UnexpectedArg s
 
-  doRun ctx (Scan (Left xs) _ _) [] = Left $ missingArg CtxEnd xs
-  doRun ctx (Scan (Right (Right a)) _ _) [] = Right a
-  doRun ctx (Scan (Right (Left e)) _ _) [] = Left $ toParserError CtxEnd e
+  doRun _   (Scan (Left xs) _ _) [] = Left $ missingArg CtxEnd xs
+  doRun _   (Scan (Right (Right a)) _ _) [] = Right a
+  doRun _   (Scan (Right (Left e)) _ _) [] = Left $ toParserError CtxEnd e
 
   doRun ctx pa@(Scan _ argH shortH) (s:ss) = case argH s of
     Just fpa -> case runFollower (CtxArg s) fpa ss of
@@ -318,7 +316,7 @@ runParser = doRun CtxStart where
     Nothing -> case s of
       ('-':cs@(c:_:_)) | isJust (shortH c) -> case runShorts s ctx pa cs of
         Right (ctx', pa') -> doRun ctx' pa' ss
-        Left (SEUnexpectedChar c) -> Left $ UnexpectedChar c s
+        Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
         Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
       _ -> Left $ UnexpectedArg s
 
