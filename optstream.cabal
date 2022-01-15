@@ -27,7 +27,7 @@ license-file:        LICENSE
 author:              Dan Shved <danshved@gmail.com>
 maintainer:          danshved@gmail.com
 copyright:           (c) 2022 Dan Shved
--- category:
+category:            CLI, Options, Parsing
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
