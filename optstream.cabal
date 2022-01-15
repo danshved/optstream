@@ -23,7 +23,7 @@ library
                        Options.OptStream.IOOps
   other-modules:       Options.OptStream.Internal
   -- other-extensions:
-  build-depends:       base >=4.13 && < 4.17
+  build-depends:       base >= 4.13.0 && < 4.16
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -44,5 +44,6 @@ test-suite optstream-test
 -- TODO: description
 -- TODO: category
 -- TODO: bug reports
--- TODO: versions of dependencies (both upper and lower bounds), including the test suite.
--- TODO: make -Wall clean
+-- TODO: versions of dependencies (both upper and lower bounds), including the test suite (?).
+-- TODO: try to make work with base < 4.13 (issues with 'fail').
+-- TODO: try even newer GHC than 9.0.1, probably with Nix

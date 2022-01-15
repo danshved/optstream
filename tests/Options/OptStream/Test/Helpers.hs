@@ -13,14 +13,32 @@ command line examples for them to parse.
 {-# LANGUAGE DeriveGeneric #-}
 module Options.OptStream.Test.Helpers where
 
-import Control.Exception
-import Data.Either
-import Data.Functor
-import Data.List hiding (union, intersect, null)
-import Data.Maybe
-import GHC.Generics
+import Control.Exception (ErrorCall, evaluate, try)
+import Data.Either (isLeft, isRight)
+import Data.Functor (($>))
+import Data.List (isPrefixOf)
+import Data.Maybe (catMaybes)
+import GHC.Generics (Generic)
 import Prelude hiding (null)
 import Test.QuickCheck
+  ( Arbitrary(..)
+  , Gen
+  , Property
+  , choose
+  , counterexample
+  , elements
+  , frequency
+  , genericShrink
+  , ioProperty
+  , listOf
+  , oneof
+  , property
+  , shrinkList
+  , shuffle
+  , suchThat
+  , (===)
+  , (.&&.)
+  )
 import qualified Prelude as P
 
 import Options.OptStream
