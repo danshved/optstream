@@ -7,7 +7,14 @@ Stability   : experimental
 
 This module contains 'RawParser' and 'RawFollower', which are the actual types
 used by 'Options.OptStream.Parser' and 'Opteans.OptStream.Follower' internally.
-'RawParser' is a twice-applicative and monadic substream parser.
+
+'RawParser' is the core type of the /optstream/ library. It provides a
+twice-applicative and once-monadic interface for building command line parsers.
+It takes care of the parsing itself, but doesn't deal with higher-level
+features such as help generation. 'Parser' is a (rather thin) wrapper built on
+top of 'RawParser' in order to provide basic handling of @--help@. You can
+build your own interface on top of 'RawParser' to provide more sophisticated
+features.
 -}
 module Options.OptStream.Raw
   ( module Options.OptStream.Classes
@@ -379,7 +386,7 @@ instance Alternative RawParser where
       argH'' s = argH s <|> argH' s
       shortH'' s = shortH s <|> shortH' s
 
-instance SubstreamParser RawParser where
+instance SelectiveParser RawParser where
   Done (Right f) <#> pa = fmap f pa
   Done (Left e) <#> _ = Done $ Left e
   pf <#> Done (Right a) = fmap ($ a) pf

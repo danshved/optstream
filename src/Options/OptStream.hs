@@ -316,7 +316,7 @@ nextMetavar = R.nextMetavar . toRawFollower
 --
 --   * Use combinators '<$>', '<#>', '<|>', '<*>' and others to produce one
 --   single @'Parser' a@. You can find some useful combinators in classes
---   'SubstreamParser', 'FunctorFail', and 'ApplicativeFail'.
+--   'SelectiveParser', 'FunctorFail', and 'ApplicativeFail'.
 --
 --   * Run the parser with 'runParser' or one of the convenience wrappers, such
 --   as 'parseArgsWithHelp'.
@@ -375,7 +375,7 @@ instance Alternative Parser where
   empty = lift0 empty
   (<|>) = lift2 (<|>)
 
-instance SubstreamParser Parser where
+instance SelectiveParser Parser where
   eof = lift0 eof
   (<#>) = lift2 (<#>)
   (<-#>) = lift2 (<-#>)
@@ -1743,7 +1743,7 @@ withVersionIO' = lift1 . R.withVersionIO'
 -- TODO: add anyArgRead et. al.
 
 -- TODO: Check laws for all instances in this file.
--- TODO: Figure out which laws there are in SubstreamParser.
+-- TODO: Figure out which laws there are in SelectiveParser.
 -- TODO: (?) Identify what type of grammars we are parsing here, exactly. Does
 --       it fit the established classification?
 

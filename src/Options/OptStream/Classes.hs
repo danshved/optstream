@@ -5,7 +5,7 @@ License     : BSD-3
 Maintainer  : danshved@gmail.com
 Stability   : experimental
 
-This module contains the 'SubstreamParser' typeclass. Substream parsers can be
+This module contains the 'SelectiveParser' typeclass. Selective parsers can be
 composed in many ways, notably using sequential application '<*>' as well as
 parallel application '<#>', which makes them /twice applicative/. See the
 typeclass documentation for more details.
@@ -15,7 +15,7 @@ Normally you shouldn't need to import this module as it is re-exported by
 -}
 module Options.OptStream.Classes
   ( -- * Twice applicative parsers
-    SubstreamParser(..)
+    SelectiveParser(..)
   , orElse
   , applyMany
   , applySome
@@ -103,7 +103,7 @@ class (Applicative f, FunctorFail f) => ApplicativeFail f where
   failA = fmapOrFail Left . pure
 
 
--- * SubstreamParser
+-- * SelectiveParser
 
 infixl 4 <#>
 infixl 4 <#
@@ -123,22 +123,22 @@ infixl 4 <##->
 infixl 3 <-|>
 infixl 3 <|->
 
--- | A type @p@ is a 'SubstreamParser' if it offers functions '<#>', '<-#>',
+-- | A type @p@ is a 'SelectiveParser' if it offers functions '<#>', '<-#>',
 -- '<#->', '<-|>', '<|->', 'eof', standard 'Applicative' functions 'pure' and
 -- '<*>', and 'Alternative' functions 'empty' and '<|>'.
 --
--- A substream parser handles a stream of /tokens/ of some kind. In case of
+-- A selective parser handles a stream of /tokens/ of some kind. In case of
 -- 'Options.OptStream.Parser' and 'Options.OptStream.RawParser', there are two
 -- kinds of tokens: command line arguments and short flags (which are
 -- characters inside command line arguments starting with one @-@). Common to
--- all substream parsers is also a special EOF token that is received at the
+-- all selective parsers is also a special EOF token that is received at the
 -- end of the stream.
 --
--- A substream parser looks at each token, including EOF, and makes one of
+-- A selective parser looks at each token, including EOF, and makes one of
 -- these decisions:
 --
 --  * /Skip/ the token, in which case the token may be consumed by a different
---  parser. Hence the name /substream parser/: a parser only handles part of
+--  parser. Hence the name /selective parser/: a parser only handles part of
 --  the stream and skips the rest.
 --
 --  * /Consume/ the token, in which case there are generally two subchoices:
@@ -152,7 +152,7 @@ infixl 3 <|->
 --
 -- ==== Applicative
 --
--- The meaning of 'Applicative' functions for substream parsers:
+-- The meaning of 'Applicative' functions for selective parsers:
 --
 -- [@'pure' a@]: A parser that finishes immediately before looking at any tokens
 -- and produces the value @a@.
@@ -177,11 +177,11 @@ infixl 3 <|->
 -- the decision has been made and cannot be reversed.
 --
 -- [@many@, @some@, @optional@]:  These functions from "Control.Applicative"
--- use 'pure' as a fallback alternative. This doesn't work for substream
+-- use 'pure' as a fallback alternative. This doesn't work for selective
 -- parsers (see 'orElse'), so this module provides its own replacements with
 -- the same names: 'Options.OptStream.Classes.many',
 -- 'Options.OptStream.Classes.some', 'Options.OptStream.Classes.optional'.
-class Alternative p => SubstreamParser p where
+class Alternative p => SelectiveParser p where
   -- | Parallel application. This runs two parsers in parallel. For each input
   -- token, the left hand side (LHS) parser looks at it first. If the LHS
   -- parser skips the token, the right hand side (RHS) parser gets a chance to
@@ -190,7 +190,7 @@ class Alternative p => SubstreamParser p where
   -- parser also finishes and produces a combined result of type @b@.
   --
   -- Together with the sequential application '<*>' this operation makes
-  -- substream parsers "twice applicative".
+  -- selective parsers "twice applicative".
   (<#>) :: p (a -> b) -> p a -> p b
 
   -- | Left-interruptive application. This starts out in the same way as '<#>':
@@ -338,43 +338,43 @@ class Alternative p => SubstreamParser p where
 -- same parse result. However, unlike 'orElse' 'pure' finishes the parse
 -- immediately, without waiting for EOF. This makes 'pure' unsuitable as a
 -- fallback alternative most of the time.
-orElse :: SubstreamParser p => a -> p a
+orElse :: SelectiveParser p => a -> p a
 orElse a = eof *> pure a
 
 -- | Convenience wrapper around 'many'. Will start with a given value of type
 -- @a@, and then will parse zero or more "updates" of type @a -> a@. Updates
 -- will be applied to the original value left-to-right until EOF is reached, at
 -- which point the final updated value will be produced.
-applyMany :: SubstreamParser p => a -> p (a -> a) -> p a
+applyMany :: SelectiveParser p => a -> p (a -> a) -> p a
 applyMany a pf = foldl (flip id) a <$> many pf
 
 -- | Convenience wrapper around 'some'. Like 'applyMany' but will insist on
 -- parsing at least one update of type @a -> a@. If no update items are parsed
 -- from the input then 'applySome' will refuse to consume EOF.
-applySome :: SubstreamParser p => a -> p (a -> a) -> p a
+applySome :: SelectiveParser p => a -> p (a -> a) -> p a
 applySome a pf = foldl (flip id) a <$> some pf
 
 -- | Like '<#>' but ignores the value produced by the right hand side parser.
-(<#) :: SubstreamParser p => p a -> p b -> p a
+(<#) :: SelectiveParser p => p a -> p b -> p a
 a <# b = const <$> a <#> b
 
 -- | Like '<#>' but ignores the value produced by the left hand side parser.
-(#>) :: SubstreamParser p => p a -> p b -> p b
+(#>) :: SelectiveParser p => p a -> p b -> p b
 a #> b = (a $> id) <#> b
 
 -- | Like '<#>' but with the types of the arguments swappped. Note that @a
 -- '<##>' f@ is not the same as @f '<#>' a@. In both '<#>' and '<##>' the left
 -- hand side parser looks at each input token before the right hand side
 -- parser.
-(<##>) :: SubstreamParser p => p a -> p (a -> b) -> p b
+(<##>) :: SelectiveParser p => p a -> p (a -> b) -> p b
 a <##> f = (\x y -> y x) <$> a <#> f
 
 -- | Like '<-#>' but ignores the value produced by the right hand side parser.
-(<-#) :: SubstreamParser p => p a -> p b -> p a
+(<-#) :: SelectiveParser p => p a -> p b -> p a
 a <-# b = const <$> a <-#> b
 
 -- | Like '<-#>' but ignores the value produced by the left hand side parser.
-(-#>) :: SubstreamParser p => p a -> p b -> p b
+(-#>) :: SelectiveParser p => p a -> p b -> p b
 a -#> b = (a $> id) <-#> b
 
 -- | Like '<-#>' but with the types of the arguments swappped. Note that @a
@@ -382,15 +382,15 @@ a -#> b = (a $> id) <-#> b
 -- will be gracefully terminated once @f@ consumes an input. However, in @a
 -- '<-##>' f@ it is @a@ that gets the first look at each input token, whereas in
 -- @f '<#->' a@ it is @f@.
-(<-##>) :: SubstreamParser p => p a -> p (a -> b) -> p b
+(<-##>) :: SelectiveParser p => p a -> p (a -> b) -> p b
 a <-##> f = (\x y -> y x) <$> a <-#> f
 
 -- | Like '<#->' but ignores the value produced by the right hand side parser.
-(<#-) :: SubstreamParser p => p a -> p b -> p a
+(<#-) :: SelectiveParser p => p a -> p b -> p a
 a <#- b = const <$> a <#-> b
 
 -- | Like '<#->' but ignores the value produced by the left hand side parser.
-(#->) :: SubstreamParser p => p a -> p b -> p b
+(#->) :: SelectiveParser p => p a -> p b -> p b
 a #-> b = (a $> id) <#-> b
 
 -- | Like '<#->' but with the types of the arguments swappped. Note that @a
@@ -398,7 +398,7 @@ a #-> b = (a $> id) <#-> b
 -- will be gracefully terminated once @a@ consumes an input. However, in @a
 -- '<##->' f@ it is @a@ that gets the first look at each input token, whereas in
 -- @f '<-#>' a@ it is @f@.
-(<##->) :: SubstreamParser p => p a -> p (a -> b) -> p b
+(<##->) :: SelectiveParser p => p a -> p (a -> b) -> p b
 a <##-> f = (\x y -> y x) <$> a <#-> f
 
 
