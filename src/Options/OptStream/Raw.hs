@@ -11,10 +11,10 @@ used by 'Options.OptStream.Parser' and 'Opteans.OptStream.Follower' internally.
 'RawParser' is the core type of the /optstream/ library. It provides a
 twice-applicative and once-monadic interface for building command line parsers.
 It takes care of the parsing itself, but doesn't deal with higher-level
-features such as help generation. 'Parser' is a (rather thin) wrapper built on
-top of 'RawParser' in order to provide basic handling of @--help@. You can
-build your own interface on top of 'RawParser' to provide more sophisticated
-features.
+features such as help generation. 'Options.OptStream.Parser' is a (rather thin)
+wrapper built on top of 'RawParser' in order to provide basic handling of
+@--help@. You can build your own interface on top of 'RawParser' to provide
+more sophisticated features.
 -}
 module Options.OptStream.Raw
   ( module Options.OptStream.Classes
