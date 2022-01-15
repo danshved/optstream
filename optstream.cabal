@@ -36,13 +36,12 @@ test-suite optstream-test
                        Options.OptStream.Test.TestIO
   build-depends:       base,
                        optstream,
-                       QuickCheck >=2.2,
-                       test-framework,
-                       test-framework-quickcheck2
+                       QuickCheck >= 2.13.0 && < 2.15,
+                       test-framework >= 0.8.2 && < 0.9,
+                       test-framework-quickcheck2 >= 0.3.0 && < 0.4
 
 -- TODO: version
 -- TODO: description
 -- TODO: category
 -- TODO: bug reports
--- TODO: versions of dependencies (both upper and lower bounds), including the test suite (?).
 -- TODO: try even newer GHC than 9.0.1, probably with Nix
