@@ -61,11 +61,13 @@ module Options.OptStream.Raw
 where
 
 import Control.Applicative hiding (some, many)
-import Control.Monad
+import Control.Monad hiding (fail)
+import Control.Monad.Fail
 import Data.Foldable
 import Data.Functor
 import Data.List
 import Data.Maybe
+import Prelude hiding (fail)
 import Text.Read
 
 import Options.OptStream.Classes

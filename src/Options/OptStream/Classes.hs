@@ -39,7 +39,9 @@ module Options.OptStream.Classes
 where
 
 import Control.Applicative hiding (some, many)
+import Control.Monad.Fail
 import Data.Functor
+import Prelude hiding (fail)
 
 
 -- * FunctorFail
