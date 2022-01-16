@@ -404,6 +404,15 @@ tests =
     , testProperty "AddsNoHelp"   prop_optional_AddsNoHelp
     ]
 
+  , testGroup "between"
+    [ testProperty "Matches"     prop_between_Matches
+    , testProperty "TooMany"     prop_between_TooMany
+    , testProperty "TooFew"      prop_between_TooFew
+    , testProperty "NegativeLow" prop_between_NegativeLow
+    , testProperty "SmallHigh"   prop_between_SmallHigh
+    , testProperty "AddsNoHelp"  prop_between_AddsNoHelp
+    ]
+
   , testGroup "perm"
     [ testProperty "Matches"   prop_perm_Matches
     , testProperty "JoinsHelp" prop_perm_JoinsHelp
@@ -1702,7 +1711,8 @@ prop_rightParallel_JoinsHelp b1 b2 =
     p2 = parser $ buildGenericExample b2
 
 
--- TODO: make this fail by improving GenericExample. Should only work if @parser ex@ doesn't accept an empty input.
+-- TODO: make this fail by improving GenericExample. Should only work if
+-- @parser ex@ doesn't accept an empty input.
 prop_many_MatchesOne builder =
   runParser (many $ parser ex) (inputs ex) === Right [result ex]
   where
@@ -1721,7 +1731,8 @@ prop_many_AddsNoHelp builder =
     p = parser $ buildGenericExample builder
 
 
--- TODO: make this fail by improving GenericExample. Should only work if @parser ex@ doesn't accept an empty input.
+-- TODO: make this fail by improving GenericExample. Should only work if
+-- @parser ex@ doesn't accept an empty input.
 prop_some_MatchesOne builder =
   runParser (some $ parser ex) (inputs ex) === Right [result ex]
   where
@@ -1758,6 +1769,42 @@ prop_optional_AddsNoHelp builder =
     p = parser $ buildGenericExample builder
 
 
+prop_between_Matches
+  (AnyArg s) (NonNegative low) (NonNegative a) (NonNegative b) =
+  runParser (between low high $ match s) (replicate x s)
+  === Right (replicate x s)
+  where
+    x = low + a
+    high = x + b
+
+prop_between_TooMany
+  (AnyArg s) (NonNegative low) (NonNegative a) (Positive b) =
+  isLeft' $ runParser (between low high $ match s) (replicate x s)
+  where
+    high = low + a
+    x = high + b
+
+prop_between_TooFew
+  (AnyArg s) (NonNegative x) (Positive a) (NonNegative b) =
+  isLeft' $ runParser (between low high $ match s) (replicate x s)
+  where
+    low = x + a
+    high = low + b
+
+prop_between_NegativeLow (AnyArg s) low high =
+  low < 0 ==>
+  throwsError . toRaw $ between low high (match s)
+
+prop_between_SmallHigh (AnyArg s) low high =
+  high < low ==>
+  throwsError . toRaw $ between low high (match s)
+
+prop_between_AddsNoHelp builder (NonNegative low) (NonNegative a) =
+  getHelp (between low (low + a) p) === getHelp p
+  where
+    p = parser $ buildGenericExample builder
+
+
 prop_perm_Matches bs =
   mutuallyDisjoint cs ==>
   forAll (shuffle $ zip is rs) $ \pairs ->
@@ -1775,7 +1822,9 @@ prop_perm_JoinsHelp bs =
     ps = map (parser . buildGenericExample) bs
 
 
+-- TODO: Improve tests for 'many', 'some', 'between' by generating multiple
+--       valid inputs for the same parser.
 -- TODO: Try refactoring examples so that Example pieces are pattern-matched,
--- like it is done for 'Fun'.
+--       like it is done for 'Fun'.
 -- TODO: Test parse failures for *Char and *Read.
 -- TODO: Test that withVersion* can interrupt a parse in the middle.
