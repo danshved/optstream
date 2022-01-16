@@ -2,7 +2,7 @@ cabal-version:       >=1.10
 
 name:                optstream
 version:             0.1.0.0
-synopsis:            Library for parsing command line options with a twice applicative interface.
+synopsis:            Command line option parsing library with a twice applicative interface.
 
 description:
   Provides tools to create command line parsers. The library has a simple
