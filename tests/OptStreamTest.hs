@@ -385,6 +385,18 @@ tests =
     , testProperty "FinishesInterrupting" prop_rightParallel_FinishesInterrupting
     , testProperty "JoinsHelp"            prop_rightParallel_JoinsHelp
     ]
+
+  , testGroup "many"
+    [ testProperty "MatchesOne"  prop_many_MatchesOne
+    , testProperty "MatchesZero" prop_many_MatchesZero
+    , testProperty "AddsNoHelp"  prop_many_AddsNoHelp
+    ]
+
+  , testGroup "some"
+    [ testProperty "MatchesOne"     prop_some_MatchesOne
+    , testProperty "NotMatchesZero" prop_some_NotMatchesZero
+    , testProperty "AddsNoHelp"     prop_some_AddsNoHelp
+    ]
   ]
 
 
@@ -1510,7 +1522,7 @@ prop_rightAlternative_JoinsHelp b1 b2 =
     p2 = parser $ buildGenericExample b2
 
 
--- * Tests for SubstreamParser
+-- * Tests for SelectiveParser
 
 prop_eof_Empty =
   runParser eof [] === Right ()
@@ -1678,6 +1690,43 @@ prop_rightParallel_JoinsHelp b1 b2 =
     p1 = parser $ buildGenericExample b1
     p2 = parser $ buildGenericExample b2
 
+
+-- TODO: make this fail by improving GenericExample. Should only work if @parser ex@ doesn't accept an empty input.
+prop_many_MatchesOne builder =
+  runParser (many $ parser ex) (inputs ex) === Right [result ex]
+  where
+    ex = buildGenericExample builder
+
+-- TODO: make this fail by improving GenericExample. This should only work if
+-- @parser ex@ doesn't accept an empty input.
+prop_many_MatchesZero builder =
+  runParser (many $ parser ex) [] === Right []
+  where
+    ex = buildGenericExample builder
+
+prop_many_AddsNoHelp builder =
+  getHelp (many p) === getHelp p
+  where
+    p = parser $ buildGenericExample builder
+
+
+-- TODO: make this fail by improving GenericExample. Should only work if @parser ex@ doesn't accept an empty input.
+prop_some_MatchesOne builder =
+  runParser (some $ parser ex) (inputs ex) === Right [result ex]
+  where
+    ex = buildGenericExample builder
+
+-- TODO: make this fail by improving GenericExample. This should only work if
+-- @parser ex@ doesn't accept an empty input.
+prop_some_NotMatchesZero builder =
+  isLeft' $ runParser (some $ parser ex) []
+  where
+    ex = buildGenericExample builder
+
+prop_some_AddsNoHelp builder =
+  getHelp (some p) === getHelp p
+  where
+    p = parser $ buildGenericExample builder
 
 
 -- TODO: Try refactoring examples so that Example pieces are pattern-matched,
