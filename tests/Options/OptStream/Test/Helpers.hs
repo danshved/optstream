@@ -93,6 +93,13 @@ union (ArgLanguage xs) (ArgLanguage ys) = ArgLanguage $ xs ++ ys
 disjoint :: ArgLanguage -> ArgLanguage -> Bool
 disjoint a b = null $ a `intersect` b
 
+mutuallyDisjoint :: [ArgLanguage] -> Bool
+mutuallyDisjoint [] = True
+mutuallyDisjoint (x:[]) = True
+mutuallyDisjoint (x:y:ys)
+  | x `disjoint` y = mutuallyDisjoint $ (x `union` y):ys
+  | otherwise = False
+
 
 data Chunk
   = Singleton String

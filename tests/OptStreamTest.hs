@@ -403,6 +403,11 @@ tests =
     , testProperty "MatchesEmpty" prop_optional_MatchesEmpty
     , testProperty "AddsNoHelp"   prop_optional_AddsNoHelp
     ]
+
+  , testGroup "perm"
+    [ testProperty "Matches"   prop_perm_Matches
+    , testProperty "JoinsHelp" prop_perm_JoinsHelp
+    ]
   ]
 
 
@@ -1752,6 +1757,22 @@ prop_optional_AddsNoHelp builder =
   where
     p = parser $ buildGenericExample builder
 
+
+prop_perm_Matches bs =
+  mutuallyDisjoint cs ==>
+  forAll (shuffle $ zip is rs) $ \pairs ->
+    runParser (perm ps) (concat $ map fst pairs) === Right (map snd pairs)
+  where
+    es = map buildGenericExample bs
+    ps = map parser es
+    is = map inputs es
+    rs = map result es
+    cs = map consumes es
+
+prop_perm_JoinsHelp bs =
+  getHelp (perm ps) === foldMap getHelp ps
+  where
+    ps = map (parser . buildGenericExample) bs
 
 
 -- TODO: Try refactoring examples so that Example pieces are pattern-matched,
