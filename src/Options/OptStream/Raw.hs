@@ -251,8 +251,8 @@ type ArgHandler a = String -> Maybe (RawFollower (RawParser a))
 -- | A short flag handler. Represents what the parser will do if the next token
 -- it receives is a short flag. A parser /may/ receive a short flag token if
 -- the command line contains an argument of the form @-XYZ@, where @XYZ@ is a
--- sequence of at least two characters that are different from @\'-\'@, and no
--- parser has consumed the argument @-XYZ@ as a whole.
+-- sequence of at least two characters, and no parser has consumed the argument
+-- @-XYZ@ as a whole.
 --
 -- The possibilities are:
 --

@@ -397,6 +397,12 @@ tests =
     , testProperty "NotMatchesZero" prop_some_NotMatchesZero
     , testProperty "AddsNoHelp"     prop_some_AddsNoHelp
     ]
+
+  , testGroup "optional"
+    [ testProperty "Matches"      prop_optional_Matches
+    , testProperty "MatchesEmpty" prop_optional_MatchesEmpty
+    , testProperty "AddsNoHelp"   prop_optional_AddsNoHelp
+    ]
   ]
 
 
@@ -1727,6 +1733,25 @@ prop_some_AddsNoHelp builder =
   getHelp (some p) === getHelp p
   where
     p = parser $ buildGenericExample builder
+
+
+prop_optional_Matches builder =
+  runParser (optional $ parser ex) (inputs ex) === (Right . Just $ result ex)
+  where
+    ex = buildGenericExample builder
+
+-- TODO: make this fail by improving GenericExample. This should only work if
+-- @parser ex@ doesn't accept an empty input.
+prop_optional_MatchesEmpty builder =
+  runParser (optional $ parser ex) [] === Right Nothing
+  where
+    ex = buildGenericExample builder
+
+prop_optional_AddsNoHelp builder =
+  getHelp (optional p) === getHelp p
+  where
+    p = parser $ buildGenericExample builder
+
 
 
 -- TODO: Try refactoring examples so that Example pieces are pattern-matched,
