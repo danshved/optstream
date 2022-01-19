@@ -242,6 +242,12 @@ shrinkLegal s@('-':c:[])
   | c /= '-' = shrinkShort s
 shrinkLegal _ = []
 
+arbitraryLegals :: Gen [OptionForm]
+arbitraryLegals = (:) <$> arbitraryLegal <*> listOf arbitraryLegal
+
+shrinkLegals :: [OptionForm] -> [[OptionForm]]
+shrinkLegals fs = filter (not . P.null) $ shrinkList shrinkLegal fs
+
 -- TODO: improve distribution to include things like '-', '--' or '-abc'.
 arbitraryIllegal :: Gen OptionForm
 arbitraryIllegal = arbitrary `suchThat` (not . isLegalOptionForm)
@@ -858,3 +864,130 @@ type GenericIOExample = GenericExample
 
 buildGenericIOExample :: GenericIOExample -> Example (TestIO String)
 buildGenericIOExample = fmap return . buildGenericExample
+
+
+
+
+-- * New style of generic examples
+
+-- | Precedence of function application.
+appPrec :: Int
+appPrec = 10
+
+-- | Precedence of <$> and <$
+fmapPrec :: Int
+fmapPrec = 4
+
+
+data NextDesc = DescNext ValueType Metavar
+  deriving (Generic)
+
+toNext :: NextDesc -> Follower String
+toNext (DescNext TypeString mv) = next mv
+toNext (DescNext TypeReadInt mv) = show <$> (nextRead mv :: Follower Int)
+toNext (DescNext TypeChar mv) = (:[]) <$> nextChar mv
+
+instance Show NextDesc where
+  showsPrec d (DescNext TypeString mv) = showParen (appPrec < d)
+    $ showString "next "
+      . showsPrec (appPrec + 1) mv
+  showsPrec d (DescNext TypeReadInt mv) = showParen (fmapPrec < d)
+    $ showString "show <$> (nextRead "
+      . showsPrec (appPrec + 1) mv
+      . showString " :: Follower Int)"
+  showsPrec d (DescNext TypeChar mv) = showParen (fmapPrec < d)
+    $ showString "(:[]) <$> nextChar "
+      . showsPrec (appPrec + 1) mv
+
+instance Arbitrary NextDesc where
+  arbitrary = DescNext <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+
+-- | Rerresents a 'Follower' that could reasonably be built by a user.
+data FollowerDesc = DescFollower [NextDesc]
+  deriving Generic
+
+toFollower :: FollowerDesc -> Follower String
+toFollower (DescFollower []) = pure ""
+toFollower (DescFollower [desc]) = toNext desc
+toFollower (DescFollower descs) = concat <$> sequenceA (map toNext descs)
+
+instance Show FollowerDesc where
+  showsPrec d (DescFollower []) = showParen (appPrec < d)
+    $ showString "pure \"\""
+  showsPrec d (DescFollower [desc]) = showsPrec d desc
+  showsPrec d (DescFollower descs) = showParen (fmapPrec < d)
+    $ showString "concat <$> sequenceA "
+      . showsPrec (appPrec + 1) descs
+
+instance Arbitrary FollowerDesc where
+  arbitrary = DescFollower <$> arbitrary
+  shrink = genericShrink
+
+class Show a => ParserDesc a where
+  toParser :: a -> Parser String
+
+data MatchDesc = Match String
+
+-- TODO: Think if this can be made nicer by making this a GADT, e.g.  having
+--       'DescMatch' be a @ParserDesc String@ and 'DescFlag' be a @ParserDesc
+--       ()@, etc.  Also think if there's anything to be gained from it. Also,
+--       this could be a fun rabbit hole with followers, leading to something
+--       like @ParserDesc (t1, (t2, (..., tn))@.
+-- | Represents a 'Parser' that could reasonably be built by a user.
+data ParserDesc
+  = DescMatch String
+  | DescMAF String FollowerDesc
+  | DescMatchShort Char
+  | DescFlag Bundling [OptionForm] HelpChoice
+  | DescParam ValueType [OptionForm] Metavar HelpChoice
+  | DescMultiParam [OptionForm] FollowerDesc HelpChoice
+  | DescFreeArg ValueType Metavar HelpChoice
+  deriving (Generic)
+
+-- TODO: deprecate mk* functions and just implement everything here.
+toParser' :: ParserDesc -> Parser String
+toParser' (DescMatch s) = match s
+toParser' (DescMAF s fd) = matchAndFollow s (toFollower fd)
+toParser' (DescMatchShort c) = (:[]) <$> matchShort c
+
+toParser' (DescFlag WithoutBundling fs WithoutHelp) = "" <$ flagSep' fs
+toParser' (DescFlag WithoutBundling fs (WithHelp d)) = "" <$ flagSep fs d
+toParser' (DescFlag WithBundling fs WithoutHelp) = "" <$ flag' fs
+toParser' (DescFlag WithBundling fs (WithHelp d)) = "" <$ flag fs d
+
+toParser' (DescParam TypeString fs mv WithoutHelp) = param' fs mv
+toParser' (DescParam TypeString fs mv (WithHelp d)) = param fs mv d
+toParser' (DescParam TypeReadInt fs mv WithoutHelp) =
+  show <$> (paramRead' fs mv :: Parser Int)
+toParser' (DescParam TypeReadInt fs mv (WithHelp d)) =
+  show <$> (paramRead fs mv d :: Parser Int)
+toParser' (DescParam TypeChar fs mv WithoutHelp) = (:[]) <$> paramChar' fs mv
+toParser' (DescParam TypeChar fs mv (WithHelp d)) = (:[]) <$> paramChar fs mv d
+
+toParser' (DescMultiParam fs fd WithoutHelp) = multiParam' fs (toFollower fd)
+toParser' (DescMultiParam fs fd (WithHelp d)) = multiParam fs (toFollower fd) d
+
+toParser' (DescFreeArg TypeString mv WithoutHelp) = freeArg' mv
+toParser' (DescFreeArg TypeString mv (WithHelp d)) = freeArg mv d
+toParser' (DescFreeArg TypeReadInt mv WithoutHelp) =
+  show <$> (freeArgRead' mv :: Parser Int)
+toParser' (DescFreeArg TypeReadInt mv (WithHelp d)) =
+  show <$> (freeArgRead mv d :: Parser Int)
+toParser' (DescFreeArg TypeChar mv WithoutHelp) = (:[]) <$> freeArgChar' mv
+toParser' (DescFreeArg TypeChar mv (WithHelp d)) = (:[]) <$> freeArgChar mv d
+
+instance Show ParserDesc where
+  showsPrec d (DescMatch s) = showParen (appPrec < d)
+    $ showString "match "
+      . showsPrec (appPrec + 1) s
+  showsPrec d (DescMAF s fd) = showParen (appPrec < d)
+    $ showString "matchAndFollow "
+      . showsPrec (appPrec + 1) s
+      . showString " "
+      . showsPrec (appPrec + 1) fd
+  showsPrec d (DescMatchShort c) = showParen (fmapPrec < d)
+    $ showString "(:[]) <$> matchShort "
+      . showsPrec (appPrec + 1) c
+

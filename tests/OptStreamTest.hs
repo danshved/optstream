@@ -1821,6 +1821,8 @@ prop_perm_JoinsHelp bs =
   where
     ps = map (parser . buildGenericExample) bs
 
+prop_blah (_ :: Int, _ :: String) = True
+
 
 -- TODO: Improve tests for 'many', 'some', 'between' by generating multiple
 --       valid inputs for the same parser.
