@@ -878,6 +878,57 @@ appPrec = 10
 fmapPrec :: Int
 fmapPrec = 4
 
+-- | "Precedence" of type annotations (::). Probably a heretic thing to say
+-- since :: is not an operator, but pretending like it has precedence 0
+-- produces satisfactory outputs for our Show instances.
+typePrec :: Int
+typePrec = 0
+
+-- | Raw representation for "a thing that can be shown".
+type ShowP = Int -> ShowS
+
+-- | Helper to call ShowP objects.
+showP :: Int -> ShowP -> ShowS
+showP = flip id
+
+-- TODO: try to make one 'appS' to rule them all using typeclass magic.
+
+appS :: Show a => String -> a -> ShowP
+appS f a p
+  = showParen (appPrec < p)
+  $ showString (f ++ " ")
+  . showsPrec (appPrec + 1) a
+
+appS2 :: (Show a, Show b) => String -> a -> b -> ShowP
+appS2 f a b p
+  = showParen (appPrec < p)
+  $ showString (f ++ " ")
+  . showsPrec (appPrec + 1) a
+  . showString " "
+  . showsPrec (appPrec + 1) b
+
+appS3 :: (Show a, Show b, Show c) => String -> a -> b -> c -> ShowP
+appS3 f a b c p
+  = showParen (appPrec < p)
+  $ showString (f ++ " ")
+  . showsPrec (appPrec + 1) a
+  . showString " "
+  . showsPrec (appPrec + 1) b
+  . showString " "
+  . showsPrec (appPrec + 1) c
+
+fmapS :: String -> String -> ShowP -> ShowP
+fmapS f op showRHS p
+  = showParen (fmapPrec < p)
+  $ showString (f ++ " " ++ op ++ " ")
+  . showRHS (fmapPrec + 1)
+
+typeS :: String -> ShowP -> ShowP
+typeS t showVal p
+  = showParen (typePrec < p)
+  $ showVal (typePrec + 1)
+  . showString (" :: " ++ t)
+
 
 data NextDesc = DescNext ValueType Metavar
   deriving (Generic)
@@ -888,16 +939,11 @@ toNext (DescNext TypeReadInt mv) = show <$> (nextRead mv :: Follower Int)
 toNext (DescNext TypeChar mv) = (:[]) <$> nextChar mv
 
 instance Show NextDesc where
-  showsPrec d (DescNext TypeString mv) = showParen (appPrec < d)
-    $ showString "next "
-      . showsPrec (appPrec + 1) mv
-  showsPrec d (DescNext TypeReadInt mv) = showParen (fmapPrec < d)
-    $ showString "show <$> (nextRead "
-      . showsPrec (appPrec + 1) mv
-      . showString " :: Follower Int)"
-  showsPrec d (DescNext TypeChar mv) = showParen (fmapPrec < d)
-    $ showString "(:[]) <$> nextChar "
-      . showsPrec (appPrec + 1) mv
+  showsPrec p (DescNext TypeString mv) = showP p $ appS "next" mv
+  showsPrec p (DescNext TypeReadInt mv) = showP p
+    $ fmapS "show" "<$>" $ typeS "Follower Int" $ appS "nextRead" mv
+  showsPrec p (DescNext TypeChar mv) = showP p
+    $ fmapS "(:[])" "<$>" $ appS "nextChar" mv
 
 instance Arbitrary NextDesc where
   arbitrary = DescNext <$> arbitrary <*> arbitrary
@@ -914,21 +960,15 @@ toFollower (DescFollower [desc]) = toNext desc
 toFollower (DescFollower descs) = concat <$> sequenceA (map toNext descs)
 
 instance Show FollowerDesc where
-  showsPrec d (DescFollower []) = showParen (appPrec < d)
-    $ showString "pure \"\""
-  showsPrec d (DescFollower [desc]) = showsPrec d desc
-  showsPrec d (DescFollower descs) = showParen (fmapPrec < d)
-    $ showString "concat <$> sequenceA "
-      . showsPrec (appPrec + 1) descs
+  showsPrec p (DescFollower []) = showP p $ appS "pure" "\"\""
+  showsPrec p (DescFollower [desc]) = showsPrec p desc
+  showsPrec p (DescFollower descs) = showP p $
+    fmapS "concat" "<$>" $ appS "sequenceA" descs
 
 instance Arbitrary FollowerDesc where
   arbitrary = DescFollower <$> arbitrary
   shrink = genericShrink
 
-class Show a => ParserDesc a where
-  toParser :: a -> Parser String
-
-data MatchDesc = Match String
 
 -- TODO: Think if this can be made nicer by making this a GADT, e.g.  having
 --       'DescMatch' be a @ParserDesc String@ and 'DescFlag' be a @ParserDesc
@@ -946,48 +986,140 @@ data ParserDesc
   | DescFreeArg ValueType Metavar HelpChoice
   deriving (Generic)
 
--- TODO: deprecate mk* functions and just implement everything here.
-toParser' :: ParserDesc -> Parser String
-toParser' (DescMatch s) = match s
-toParser' (DescMAF s fd) = matchAndFollow s (toFollower fd)
-toParser' (DescMatchShort c) = (:[]) <$> matchShort c
+-- TODO: deprecate mk* functions and use the below everywhere instead.
+toParser :: ParserDesc -> Parser String
+toParser (DescMatch s) = match s
+toParser (DescMAF s fd) = matchAndFollow s (toFollower fd)
+toParser (DescMatchShort c) = (:[]) <$> matchShort c
 
-toParser' (DescFlag WithoutBundling fs WithoutHelp) = "" <$ flagSep' fs
-toParser' (DescFlag WithoutBundling fs (WithHelp d)) = "" <$ flagSep fs d
-toParser' (DescFlag WithBundling fs WithoutHelp) = "" <$ flag' fs
-toParser' (DescFlag WithBundling fs (WithHelp d)) = "" <$ flag fs d
+toParser (DescFlag WithoutBundling fs WithoutHelp) = "" <$ flagSep' fs
+toParser (DescFlag WithoutBundling fs (WithHelp d)) = "" <$ flagSep fs d
+toParser (DescFlag WithBundling fs WithoutHelp) = "" <$ flag' fs
+toParser (DescFlag WithBundling fs (WithHelp d)) = "" <$ flag fs d
 
-toParser' (DescParam TypeString fs mv WithoutHelp) = param' fs mv
-toParser' (DescParam TypeString fs mv (WithHelp d)) = param fs mv d
-toParser' (DescParam TypeReadInt fs mv WithoutHelp) =
+toParser (DescParam TypeString fs mv WithoutHelp) = param' fs mv
+toParser (DescParam TypeString fs mv (WithHelp d)) = param fs mv d
+toParser (DescParam TypeReadInt fs mv WithoutHelp) =
   show <$> (paramRead' fs mv :: Parser Int)
-toParser' (DescParam TypeReadInt fs mv (WithHelp d)) =
+toParser (DescParam TypeReadInt fs mv (WithHelp d)) =
   show <$> (paramRead fs mv d :: Parser Int)
-toParser' (DescParam TypeChar fs mv WithoutHelp) = (:[]) <$> paramChar' fs mv
-toParser' (DescParam TypeChar fs mv (WithHelp d)) = (:[]) <$> paramChar fs mv d
+toParser (DescParam TypeChar fs mv WithoutHelp) = (:[]) <$> paramChar' fs mv
+toParser (DescParam TypeChar fs mv (WithHelp d)) = (:[]) <$> paramChar fs mv d
 
-toParser' (DescMultiParam fs fd WithoutHelp) = multiParam' fs (toFollower fd)
-toParser' (DescMultiParam fs fd (WithHelp d)) = multiParam fs (toFollower fd) d
+toParser (DescMultiParam fs fd WithoutHelp) = multiParam' fs (toFollower fd)
+toParser (DescMultiParam fs fd (WithHelp d)) = multiParam fs (toFollower fd) d
 
-toParser' (DescFreeArg TypeString mv WithoutHelp) = freeArg' mv
-toParser' (DescFreeArg TypeString mv (WithHelp d)) = freeArg mv d
-toParser' (DescFreeArg TypeReadInt mv WithoutHelp) =
+toParser (DescFreeArg TypeString mv WithoutHelp) = freeArg' mv
+toParser (DescFreeArg TypeString mv (WithHelp d)) = freeArg mv d
+toParser (DescFreeArg TypeReadInt mv WithoutHelp) =
   show <$> (freeArgRead' mv :: Parser Int)
-toParser' (DescFreeArg TypeReadInt mv (WithHelp d)) =
+toParser (DescFreeArg TypeReadInt mv (WithHelp d)) =
   show <$> (freeArgRead mv d :: Parser Int)
-toParser' (DescFreeArg TypeChar mv WithoutHelp) = (:[]) <$> freeArgChar' mv
-toParser' (DescFreeArg TypeChar mv (WithHelp d)) = (:[]) <$> freeArgChar mv d
+toParser (DescFreeArg TypeChar mv WithoutHelp) = (:[]) <$> freeArgChar' mv
+toParser (DescFreeArg TypeChar mv (WithHelp d)) = (:[]) <$> freeArgChar mv d
+
 
 instance Show ParserDesc where
-  showsPrec d (DescMatch s) = showParen (appPrec < d)
-    $ showString "match "
-      . showsPrec (appPrec + 1) s
-  showsPrec d (DescMAF s fd) = showParen (appPrec < d)
-    $ showString "matchAndFollow "
-      . showsPrec (appPrec + 1) s
-      . showString " "
-      . showsPrec (appPrec + 1) fd
-  showsPrec d (DescMatchShort c) = showParen (fmapPrec < d)
-    $ showString "(:[]) <$> matchShort "
-      . showsPrec (appPrec + 1) c
+  showsPrec p (DescMatch s) = showP p $ appS "match" s
+  showsPrec p (DescMAF s fd) = showP p $ appS2 "matchAndFollow" s fd
+
+  showsPrec p (DescMatchShort c) = showP p
+    $ fmapS "(:[])" "<$>" $ appS "matchShort" c
+
+  showsPrec p (DescFlag WithoutBundling fs WithoutHelp) = showP p
+    $ fmapS "\"\"" "<$" $ appS "flagSep'" fs
+  showsPrec p (DescFlag WithoutBundling fs (WithHelp d)) = showP p
+    $ fmapS "\"\"" "<$" $ appS2 "flagSep" fs d
+  showsPrec p (DescFlag WithBundling fs WithoutHelp) = showP p
+    $ fmapS "\"\"" "<$" $ appS "flag'" fs
+  showsPrec p (DescFlag WithBundling fs (WithHelp d)) = showP p
+    $ fmapS "\"\"" "<$" $ appS2 "flag" fs d
+
+  showsPrec p (DescParam TypeString fs mv WithoutHelp) = showP p
+    $ appS2 "param'" fs mv
+  showsPrec p (DescParam TypeString fs mv (WithHelp d)) = showP p
+    $ appS3 "param" fs mv d
+  showsPrec p (DescParam TypeReadInt fs mv WithoutHelp) = showP p
+    $ fmapS "show" "<$>" $ typeS "Parser Int" $ appS2 "paramRead'" fs mv
+  showsPrec p (DescParam TypeReadInt fs mv (WithHelp d)) = showP p
+    $ fmapS "show" "<$>" $ typeS "Parser Int" $ appS3 "paramRead" fs mv d
+  showsPrec p (DescParam TypeChar fs mv WithoutHelp) = showP p
+    $ fmapS "(:[])" "<$>" $ appS2 "paramChar'" fs mv
+  showsPrec p (DescParam TypeChar fs mv (WithHelp d)) = showP p
+    $ fmapS "(:[])" "<$>" $ appS3 "paramChar" fs mv d
+
+  showsPrec p (DescMultiParam fs fd WithoutHelp) = showP p
+    $ appS2 "multiParam'" fs fd
+  showsPrec p (DescMultiParam fs fd (WithHelp d)) = showP p
+    $ appS3 "multiParam" fs fd d
+
+  showsPrec p (DescFreeArg TypeString mv WithoutHelp) = showP p
+    $ appS "freeArg'" mv
+  showsPrec p (DescFreeArg TypeString mv (WithHelp d)) = showP p
+    $ appS2 "freeArg" mv d
+  showsPrec p (DescFreeArg TypeReadInt mv WithoutHelp) = showP p
+    $ fmapS "show" "<$>" $ typeS "Parser Int" $ appS "freeArgRead'" mv
+  showsPrec p (DescFreeArg TypeReadInt mv (WithHelp d)) = showP p
+    $ fmapS "show" "<$>" $ typeS "Parser Int" $ appS2 "freeArgRead" mv d
+  showsPrec p (DescFreeArg TypeChar mv WithoutHelp) = showP p
+    $ fmapS "(:[])" "<$>" $ appS "freeArgChar'" mv
+  showsPrec p (DescFreeArg TypeChar mv (WithHelp d)) = showP p
+    $ fmapS "(:[])" "<$>" $ appS2 "freeArgChar" mv d
+
+
+instance Arbitrary ParserDesc where
+  arbitrary = oneof
+    [ DescMatch <$> arbitraryArg
+    , DescMAF <$> arbitraryArg <*> arbitrary
+    , DescMatchShort <$> arbitraryChar
+    , DescFlag <$> arbitrary <*> arbitraryLegals <*> arbitrary
+    , DescParam <$> arbitrary <*> arbitraryLegals <*> arbitrary <*> arbitrary
+    , DescMultiParam <$> arbitraryLegals <*> arbitrary <*> arbitrary
+    , DescFreeArg <$> arbitrary <*> arbitrary <*> arbitrary
+    ]
+
+  shrink (DescMatch s) = [DescMatch s' | s' <- shrink s]
+
+  shrink (DescMAF s f)
+    =  [DescMAF s' f | s' <- shrink s]
+    ++ [DescMAF s f' | f' <- shrink f]
+    ++ [DescMatch s]
+
+  shrink (DescMatchShort c)
+    =  [DescMatchShort c' | c' <- shrink c]
+    ++ [DescMatch ['-', c]]
+
+  shrink (DescFlag b fs h)
+    =  [DescFlag b' fs h | b' <- shrink b]
+    ++ [DescFlag b fs' h | fs' <- shrinkLegals fs]
+    ++ [DescFlag b fs h' | h' <- shrink h]
+    ++ [DescMatch f | f <- fs]
+    ++ [DescMatchShort c | ['-', c] <- fs]
+
+  shrink (DescParam vt fs mv h)
+    =  [DescParam vt' fs mv h | vt' <- shrink vt]
+    ++ [DescParam vt fs' mv h | fs' <- shrinkLegals fs]
+    ++ [DescParam vt fs mv' h | mv' <- shrink mv]
+    ++ [DescParam vt fs mv h' | h' <- shrink h]
+    ++ [DescMatch f | f <- fs]
+    ++ [DescMAF f (DescFollower [DescNext vt mv]) | f <- fs]
+    ++ [DescFlag WithoutBundling fs h]
+
+  shrink (DescMultiParam fs fd h)
+    =  [DescMultiParam fs' fd h | fs' <- shrinkLegals fs]
+    ++ [DescMultiParam fs fd' h | fd' <- shrink fd]
+    ++ [DescMultiParam fs fd h' | h' <- shrink h]
+    ++ [DescMatch f | f <- fs]
+    ++ [DescMAF f fd | f <- fs]
+    ++ [DescFlag WithoutBundling fs h]
+    ++ (toPar fd)
+    where
+      toPar (DescFollower ((DescNext vt mv):_)) = [DescParam vt fs mv h]
+      toPar _ = []
+
+  shrink (DescFreeArg vt mv h)
+    =  [DescFreeArg vt' mv h | vt' <- shrink vt]
+    ++ [DescFreeArg vt mv' h | mv' <- shrink mv]
+    ++ [DescFreeArg vt mv h' | h' <- shrink h]
+
 
