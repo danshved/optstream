@@ -925,6 +925,14 @@ fmapS f op showRHS p
   $ showString (f ++ " " ++ op ++ " ")
   . showRHS (fmapPrec + 1)
 
+fmapS2 :: (Show a, Show b) => String -> String -> a -> String -> b -> ShowP
+fmapS2 f op1 a op2 b p
+  = showParen (fmapPrec < p)
+  $ showString (f ++ " " ++ op1 ++ " ")
+  . showsPrec (fmapPrec + 1) a
+  . showString (" " ++ op2 ++ " ")
+  . showsPrec (fmapPrec + 1) b
+
 typeS :: String -> ShowP -> ShowP
 typeS t showVal p
   = showParen (typePrec < p)
@@ -986,6 +994,7 @@ data ParserDesc
   | DescParam ValueType [OptionForm] Metavar HelpChoice
   | DescMultiParam [OptionForm] FollowerDesc HelpChoice
   | DescFreeArg ValueType Metavar HelpChoice
+  | DescAp ParserDesc ParserDesc
   deriving (Generic)
 
 -- TODO: deprecate mk* functions and use the below everywhere instead.
@@ -1020,6 +1029,8 @@ toParser (DescFreeArg TypeReadInt mv (WithHelp d)) =
 toParser (DescFreeArg TypeChar mv WithoutHelp) = (:[]) <$> freeArgChar' mv
 toParser (DescFreeArg TypeChar mv (WithHelp d)) = (:[]) <$> freeArgChar mv d
 
+toParser (DescAp p1 p2) = (++) <$> toParser p1 <*> toParser p2
+
 
 consumes :: ParserDesc -> ArgLanguage
 consumes (DescMatch s) = singleton s
@@ -1029,6 +1040,7 @@ consumes (DescFlag _ fs _) = mconcat $ map singleton fs
 consumes (DescParam _ fs _ _) = mconcat $ map withPrefix fs
 consumes (DescMultiParam fs _ _) = mconcat $ map singleton fs
 consumes (DescFreeArg _ _ _) = freeArgs
+consumes (DescAp p1 p2) = consumes p1 `union` consumes p2
 
 
 instance Show ParserDesc where
@@ -1078,6 +1090,9 @@ instance Show ParserDesc where
   showsPrec p (DescFreeArg TypeChar mv (WithHelp d)) = showP p
     $ fmapS "(:[])" "<$>" $ appS2 "freeArgChar" mv d
 
+  showsPrec p (DescAp p1 p2) = showP p
+    $ fmapS2 "(++)" "<$>" p1 "<*>" p2
+
 
 instance Arbitrary ParserDesc where
   arbitrary = oneof
@@ -1088,6 +1103,7 @@ instance Arbitrary ParserDesc where
     , DescParam <$> arbitrary <*> arbitraryLegals <*> arbitrary <*> arbitrary
     , DescMultiParam <$> arbitraryLegals <*> arbitrary <*> arbitrary
     , DescFreeArg <$> arbitrary <*> arbitrary <*> arbitrary
+    , DescAp <$> arbitrary <*> arbitrary
     ]
 
   shrink (DescMatch s) = [DescMatch s' | s' <- shrink s]
@@ -1134,6 +1150,11 @@ instance Arbitrary ParserDesc where
     ++ [DescFreeArg vt mv' h | mv' <- shrink mv]
     ++ [DescFreeArg vt mv h' | h' <- shrink h]
 
+  shrink (DescAp l r)
+    =  [DescAp l' r | l' <- shrink l]
+    ++ [DescAp l r' | r' <- shrink r]
+    ++ [l, r]
+
 
 -- | Convenience datatype wrapping a parser together with its description.
 -- Meant to be used as a function argument for QuickCheck properties.
@@ -1154,6 +1175,7 @@ data Example
   | ExParamShort String Value
   | ExParamLong String Value
   | ExFree Value
+  | ExAp Example Example
   deriving Show
 
 input :: Example -> [String]
@@ -1162,6 +1184,7 @@ input (ExMAF s vs) = s:map formatValue vs
 input (ExParamShort s v) = [s ++ formatValue v]
 input (ExParamLong s v) = [s ++ "=" ++ formatValue v]
 input (ExFree v) = [formatValue v]
+input (ExAp l r) = input l ++ input r
 
 output :: Example -> String
 output (ExMatch _ o) = o
@@ -1169,6 +1192,7 @@ output (ExMAF _ vs) = concat $ map formatValue vs
 output (ExParamShort _ v) = formatValue v
 output (ExParamLong _ v) = formatValue v
 output (ExFree v) = formatValue v
+output (ExAp l r) = output l ++ output r
 
 arbitraryEx :: ParserDesc -> Gen Example
 arbitraryEx (DescMatch s) = pure $ ExMatch s s
@@ -1194,7 +1218,11 @@ arbitraryEx (DescMultiParam fs (DescFollower ns) _) = do
   return $ ExMAF form vs
 arbitraryEx (DescFreeArg vt _ _) =
   ExFree <$> (arbitraryValue vt `suchThat` (isFree . formatValue))
+arbitraryEx (DescAp l r) =
+  ExAp <$> arbitraryEx l <*> arbitraryEx r
 
+-- TODO: use set union instead of cartesian products in the implementation
+-- below.
 shrinkEx :: Example -> [Example]
 shrinkEx (ExMatch _ _) = []
 shrinkEx (ExMAF s vs) = [ExMAF s vs' | vs' <- traverse genericShrink vs]
@@ -1202,6 +1230,7 @@ shrinkEx (ExParamShort s v) = [ExParamShort s v' | v' <- genericShrink v]
 shrinkEx (ExParamLong s v) = [ExParamLong s v' | v' <- genericShrink v]
 shrinkEx (ExFree v) =
   [ExFree v' | v' <- genericShrink v, isFree $ formatValue v']
+shrinkEx (ExAp l r) = [ExAp l' r' | l' <- shrinkEx l, r' <- shrinkEx r]
 
 forAllEx :: Testable t => ParserDesc -> (Example -> t) -> Property
 forAllEx parserDesc = forAllShrinkShow gen shrinkEx showf where
