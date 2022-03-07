@@ -567,7 +567,7 @@ data Example' a = Example'
     -- argument possibly followed by more arguments consumed by a 'Follower'.
   , result :: a
     -- ^ The value that the parser should produce.
-  , consumes :: ArgLanguage
+  , consumes' :: ArgLanguage
     -- ^ A set containing (at least) all the strings the parser is supposed to
     -- be willing to consume. The parser should skip any string not belonging
     -- to this set.
@@ -584,7 +584,7 @@ buildMatchExample s = Example'
   { parser = match s
   , blocks = [[s]]
   , result = s
-  , consumes = singleton s
+  , consumes' = singleton s
   }
 
 buildMatchShortExample :: Char -> Example' Char
@@ -592,7 +592,7 @@ buildMatchShortExample c = Example'
   { parser = matchShort c
   , blocks = [[['-', c]]]
   , result = c
-  , consumes = singleton ['-', c]
+  , consumes' = singleton ['-', c]
   }
 
 
@@ -610,7 +610,7 @@ buildMAFExample (MAFExample s pairs)
   { parser = matchAndFollow s follower
   , blocks = [s:xs]
   , result = xs
-  , consumes = singleton s
+  , consumes' = singleton s
   }
   where
     (follower, xs) = mkFollowerExample pairs
@@ -631,7 +631,7 @@ buildFlagExample (FlagExample help bundling fs)
   { parser = mkFlag help bundling (allForms fs)
   , blocks = [[chosenForm fs]]
   , result = ()
-  , consumes = mconcat . map singleton $ allForms fs
+  , consumes' = mconcat . map singleton $ allForms fs
   }
 
 
@@ -682,7 +682,7 @@ buildParamExample (ParamExample help fs metavar val)
   { parser = mkParam help (valueType val) forms metavar
   , blocks = [[chosenForm fs, x]]
   , result = x
-  , consumes = mconcat $ map withPrefix forms
+  , consumes' = mconcat $ map withPrefix forms
   }
   where
     forms = allForms fs
@@ -713,7 +713,7 @@ buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
   { parser = mkFreeArg help (valueType val) metavar
   , blocks = [[x]]
   , result = x
-  , consumes = freeArgs
+  , consumes' = freeArgs
   }
   where
     x = formatValue val
@@ -739,7 +739,7 @@ buildMultiParamExample (MultiParamExample helpChoice fs pairs)
   { parser = mkMultiParam helpChoice (allForms fs) f
   , blocks = [chosenForm fs:xs]
   , result = xs
-  , consumes = mconcat . map singleton $ allForms fs
+  , consumes' = mconcat . map singleton $ allForms fs
   }
   where
     (f, xs) = mkFollowerExample pairs
@@ -854,7 +854,7 @@ buildGenericExample (GenericAp x y)
   { parser = (++) <$> parser ex1 <*> parser ex2
   , blocks = blocks ex1 ++ blocks ex2
   , result = result ex1 ++ result ex2
-  , consumes = consumes ex1 `union` consumes ex2
+  , consumes' = consumes' ex1 `union` consumes' ex2
   }
   where
     ex1 = buildAtomicExample x
@@ -1019,6 +1019,16 @@ toParser (DescFreeArg TypeReadInt mv (WithHelp d)) =
   show <$> (freeArgRead mv d :: Parser Int)
 toParser (DescFreeArg TypeChar mv WithoutHelp) = (:[]) <$> freeArgChar' mv
 toParser (DescFreeArg TypeChar mv (WithHelp d)) = (:[]) <$> freeArgChar mv d
+
+
+consumes :: ParserDesc -> ArgLanguage
+consumes (DescMatch s) = singleton s
+consumes (DescMAF s _) = singleton s
+consumes (DescMatchShort c) = singleton ['-', c]
+consumes (DescFlag _ fs _) = mconcat $ map singleton fs
+consumes (DescParam _ fs _ _) = mconcat $ map withPrefix fs
+consumes (DescMultiParam fs _ _) = mconcat $ map singleton fs
+consumes (DescFreeArg _ _ _) = freeArgs
 
 
 instance Show ParserDesc where

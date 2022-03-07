@@ -32,13 +32,16 @@ main = defaultMain tests
 
 tests :: [Test]
 tests =
-  [ testGroup "flag"
-    [ testProperty "Matches"          prop_flag_Matches
-    , testProperty "Finishes"         prop_flag_Finishes
-    , testProperty "Skips"            prop_flag_Skips
-    , testProperty "Empty"            prop_flag_Empty
-    , testProperty "OrElse"           prop_flag_OrElse
-    , testProperty "NotMatches"       prop_flag_NotMatches
+  [ testGroup "generic"
+    [ testProperty "Matches" prop_Matches
+    , testProperty "Finishes" prop_Finishes
+    , testProperty "Skips" prop_Skips
+    , testProperty "Empty" prop_Empty
+    , testProperty "OrElse" prop_OrElse
+    ]
+
+  , testGroup "flag"
+    [ testProperty "NotMatches"       prop_flag_NotMatches
     , testProperty "MatchesBundle"    prop_flag_MatchesBundle
     , testProperty "NotMatchesBundle" prop_flag_NotMatchesBundle
     , testProperty "Help"             prop_flag_Help
@@ -48,12 +51,7 @@ tests =
     ]
 
   , testGroup "param"
-    [ testProperty "Matches"       prop_param_Matches
-    , testProperty "Finishes"      prop_param_Finishes
-    , testProperty "Skips"         prop_param_Skips
-    , testProperty "Empty"         prop_param_Empty
-    , testProperty "OrElse"        prop_param_OrElse
-    , testProperty "NotMatches"    prop_param_NotMatches
+    [ testProperty "NotMatches"    prop_param_NotMatches
     , testProperty "MissingArg"    prop_param_MissingArg
     , testProperty "Help"          prop_param_Help
     , testProperty "NoHelp"        prop_param_NoHelp
@@ -62,23 +60,13 @@ tests =
     ]
 
   , testGroup "freeArg"
-    [ testProperty "Matches"    prop_freeArg_Matches
-    , testProperty "Finishes"   prop_freeArg_Finishes
-    , testProperty "Skips"      prop_freeArg_Skips
-    , testProperty "Empty"      prop_freeArg_Empty
-    , testProperty "OrElse"     prop_freeArg_OrElse
-    , testProperty "NotMatches" prop_freeArg_NotMatches
+    [ testProperty "NotMatches" prop_freeArg_NotMatches
     , testProperty "Help"       prop_freeArg_Help
     , testProperty "NoHelp"     prop_freeArg_NoHelp
     ]
 
   , testGroup "multiParam"
-    [ testProperty "Matches"     prop_multiParam_Matches
-    , testProperty "Finishes"    prop_multiParam_Finishes
-    , testProperty "Skips"       prop_multiParam_Skips
-    , testProperty "Empty"       prop_multiParam_Empty
-    , testProperty "OrElse"      prop_multiParam_OrElse
-    , testProperty "NotMatches"  prop_multiParam_NotMatches
+    [ testProperty "NotMatches"  prop_multiParam_NotMatches
     , testProperty "NotEnough"   prop_multiParam_NotEnough
     , testProperty "Help"        prop_multiParam_Help
     , testProperty "NoHelp"      prop_multiParam_NoHelp
@@ -87,34 +75,19 @@ tests =
     ]
 
   , testGroup "match"
-    [ testProperty "Matches"    prop_match_Matches
-    , testProperty "Finishes"   prop_match_Finishes
-    , testProperty "Skips"      prop_match_Skips
-    , testProperty "Empty"      prop_match_Empty
-    , testProperty "OrElse"     prop_match_OrElse
-    , testProperty "NotMatches" prop_match_NotMatches
+    [ testProperty "NotMatches" prop_match_NotMatches
     , testProperty "NoHelp"     prop_match_NoHelp
     ]
 
   , testGroup "matchAndFollow"
-    [ testProperty "Matches"    prop_matchAndFollow_Matches
-    , testProperty "Finishes"   prop_matchAndFollow_Finishes
-    , testProperty "Skips"      prop_matchAndFollow_Skips
-    , testProperty "Empty"      prop_matchAndFollow_Empty
-    , testProperty "OrElse"     prop_matchAndFollow_OrElse
-    , testProperty "NotMatches" prop_matchAndFollow_NotMatches
+    [ testProperty "NotMatches" prop_matchAndFollow_NotMatches
     , testProperty "NotEnough"  prop_matchAndFollow_NotEnough
     , testProperty "NoHelp"     prop_matchAndFollow_NoHelp
     ]
 
   , testGroup "matchShort"
-    [ testProperty "Matches"          prop_matchShort_Matches
-    , testProperty "Finishes"         prop_matchShort_Finishes
-    , testProperty "Skips"            prop_matchShort_Skips
-    , testProperty "FinishesInBundle" prop_matchShort_FinishesInBundle
+    [ testProperty "FinishesInBundle" prop_matchShort_FinishesInBundle
     , testProperty "SkipsInBundle"    prop_matchShort_SkipsInBundle
-    , testProperty "Empty"            prop_matchShort_Empty
-    , testProperty "OrElse"           prop_matchShort_OrElse
     , testProperty "NotMatches"       prop_matchShort_NotMatches
     , testProperty "MatchesBundle"    prop_matchShort_MatchesBundle
     , testProperty "NoHelp"           prop_matchShort_NoHelp
@@ -418,9 +391,6 @@ tests =
     , testProperty "JoinsHelp" prop_perm_JoinsHelp
     ]
 
-  , testProperty "Matches" prop_Matches
-  , testProperty "Empty" prop_Empty
-  , testProperty "OrElse" prop_OrElse
   ]
 
 
@@ -434,33 +404,30 @@ shorts = many (short "" Just)
 
 
 
+-- * Generic tests
+
+prop_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+    runParser p i === Right o
+
+prop_Finishes (AnyParser p_ p) (AnyArg x) =
+  forAllExamples p_ $ \i o ->
+    runParser (p *> args) (i ++ [x]) === Right [x]
+
+prop_Skips (AnyParser p_ p) (AnyArg x) =
+  not (x `member` consumes p_) ==>
+  forAllExamples p_ $ \i _ ->
+    runParser (p #> args) (x:i) === Right [x]
+
+prop_Empty (AnyParser _ p) =
+  isLeft' $ runParser p []
+
+prop_OrElse (AnyParser _ p) x =
+  runParser (p <|> orElse x) [] === Right x
+
+
+
 -- * Tests for @flag*@
-
-prop_flag_Matches builder =
-  runParser (parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildFlagExample builder
-
-prop_flag_Finishes builder (AnyArg y) =
-  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
-  where
-    ex = buildFlagExample builder
-
-prop_flag_Skips builder (AnyArg y) =
-  not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) === Right [y]
-  where
-    ex = buildFlagExample builder
-
-prop_flag_Empty help bundling fs =
-  isLeft' $ runParser parser []
-  where
-    parser = mkFlag help bundling (allForms fs)
-
-prop_flag_OrElse help bundling fs =
-  runParser (parser $> True <|> orElse False) [] === Right False
-  where
-    parser = mkFlag help bundling (allForms fs)
 
 prop_flag_NotMatches help bundling fs (AnyArg x) =
   not (x `elem` forms) ==>
@@ -499,32 +466,6 @@ prop_flag_IllegalForm help bundling (ChosenIllegal fs) =
 
 -- * Tests for @param*@
 
-prop_param_Matches builder =
-  runParser (parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildParamExample builder
-
-prop_param_Finishes builder (AnyArg y) =
-  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
-  where
-    ex = buildParamExample builder
-
-prop_param_Skips builder (AnyArg y) =
-  not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) === Right [y]
-  where
-    ex = buildParamExample builder
-
-prop_param_Empty help valueType metavar fs =
-  isLeft' $ runParser parser []
-  where
-    parser = mkParam help valueType (allForms fs) metavar
-
-prop_param_OrElse help valueType metavar fs x =
-  runParser (parser <|> orElse x) [] === Right x
-  where
-    parser = mkParam help valueType (allForms fs) metavar
-
 prop_param_NotMatches help valueType metavar fs (AnyArg c) (AnyArg d) =
   not (any (`isPrefixOf` c) forms) ==>
   isLeft' $ runParser (parser *> args) [c, d]
@@ -554,30 +495,6 @@ prop_param_IllegalForm help valueType (ChosenIllegal fs) metavar =
 
 -- * Tests for @freeArg*@
 
-prop_freeArg_Matches builder =
-  runParser (parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildFreeArgExample builder
-
-prop_freeArg_Finishes builder (AnyArg y) =
-  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
-  where
-    ex = buildFreeArgExample builder
-
-prop_freeArg_Skips builder (AnyArg y) =
-  not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) === Right [y]
-  where
-    ex = buildFreeArgExample builder
-
-prop_freeArg_Empty help valueType metavar =
-  isLeft' $ runParser (mkFreeArg help valueType metavar) []
-
-prop_freeArg_OrElse help valueType metavar x =
-  runParser (parser <|> orElse x) [] === Right x
-  where
-    parser = mkFreeArg help valueType metavar
-
 prop_freeArg_NotMatches help valueType metavar a =
   isLeft' $ runParser (mkFreeArg help valueType metavar) ['-':a]
 
@@ -591,32 +508,6 @@ prop_freeArg_NoHelp valueType metavar =
 
 
 -- * Tests for @multiParam*@
-
-prop_multiParam_Matches builder =
-  runParser (parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildMultiParamExample builder
-
-prop_multiParam_Finishes builder (AnyArg y) =
-  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
-  where
-    ex = buildMultiParamExample builder
-
-prop_multiParam_Skips builder (AnyArg y) =
-  not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) === Right [y]
-  where
-    ex = buildMultiParamExample builder
-
-prop_multiParam_Empty help fs pairs =
-  isLeft' $ runParser parser []
-  where
-    parser = mkMultiParam help (allForms fs) (mkFollower pairs)
-
-prop_multiParam_OrElse help fs pairs x =
-  runParser (parser <|> orElse x) [] === Right x
-  where
-    parser = mkMultiParam help (allForms fs) (mkFollower pairs)
 
 prop_multiParam_NotMatches help fs pairs (AnyArg c) (AnyArgs cs) =
   not (c `elem` forms) ==>
@@ -653,21 +544,6 @@ prop_multiParam_IllegalForm help (ChosenIllegal fs) pairs =
 
 -- * Tests for match
 
-prop_match_Matches (AnyArg s) =
-  runParser (match s) [s] === Right s
-
-prop_match_Finishes (AnyArg s) (AnyArg y) =
-  runParser (match s *> args) [s, y] === Right [y]
-
-prop_match_Skips (AnyArg s) (AnyArg y) =
-  runParser (match s #> args) [y, s] === Right [y]
-
-prop_match_Empty (AnyArg s) =
-  isLeft' $ runParser (match s) []
-
-prop_match_OrElse (AnyArg s) x =
-  runParser (match s <|> orElse x) [] === Right x
-
 prop_match_NotMatches (AnyArg s) (AnyArg x) =
   x /= s ==>
   isLeft' $ runParser (match s) [x]
@@ -679,30 +555,6 @@ prop_match_NoHelp (AnyArg s) =
 
 -- * Tests for matchAndFollow
 
-
-prop_matchAndFollow_Matches builder =
-  runParser (parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildMAFExample builder
-
-prop_matchAndFollow_Finishes builder (AnyArg y) =
-  runParser (parser ex *> args) (inputs ex ++ [y]) === Right [y]
-  where
-    ex = buildMAFExample builder
-
-prop_matchAndFollow_Skips builder (AnyArg y) =
-  not (y `member` consumes ex) ==>
-  runParser (parser ex #> args) (y:inputs ex) === Right [y]
-  where
-    ex = buildMAFExample builder
-
-prop_matchAndFollow_Empty (AnyArg s) pairs =
-  isLeft' $ runParser (matchAndFollow s $ mkFollower pairs) []
-
-prop_matchAndFollow_OrElse (AnyArg s) pairs x =
-  runParser (parser <|> orElse x) [] === Right x
-  where
-    parser = matchAndFollow s $ mkFollower pairs
 
 prop_matchAndFollow_NotMatches (AnyArg s) pairs (AnyArg s') (AnyArgs xs) =
   s' /= s ==>
@@ -723,27 +575,12 @@ prop_matchAndFollow_NoHelp (AnyArg s) pairs =
 
 -- * Tests for matchShort
 
-prop_matchShort_Matches (AnyChar c) =
-  runParser (matchShort c) [['-', c]] === Right c
-
-prop_matchShort_Finishes (AnyChar c) (AnyArg y) =
-  runParser (matchShort c *> args) [['-', c], y] === Right [y]
-
-prop_matchShort_Skips (AnyChar c) (AnyArg y) =
-  runParser (matchShort c #> args) [y, ['-', c]] === Right [y]
-
 prop_matchShort_FinishesInBundle (AnyChar c) (AnyChars cs) =
   runParser (matchShort c *> shorts) ['-':c:cs] === Right cs
 
 prop_matchShort_SkipsInBundle (AnyChar c) (AnyChars cs) =
   not (c `elem` cs) ==>
   runParser (matchShort c #> shorts) [['-'] ++ cs ++ [c]] === Right cs
-
-prop_matchShort_Empty (AnyChar c) =
-  isLeft' $ runParser (matchShort c) []
-
-prop_matchShort_OrElse (AnyChar c) x =
-  runParser (matchShort c <|> orElse x) [] === Right x
 
 prop_matchShort_NotMatches (AnyChar c) (AnyChar x) =
   x /= c ==>
@@ -765,14 +602,14 @@ prop_withHelp_MatchesMain builder =
     ex = buildGenericExample builder
 
 prop_withHelp_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   runParser p ["--help"] === (Right . Left $ getHelp p)
   where
     ex = buildGenericExample builder
     p = withHelp $ parser ex
 
 prop_withHelp_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
     runParser p (pref ++ ["--help"] ++ ys) === (Right . Left $ getHelp p)
   where
@@ -791,14 +628,14 @@ prop_withHelp'_MatchesMain builder =
     ex = buildGenericExample builder
 
 prop_withHelp'_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   runParser (withHelp' p) ["--help"] === (Right . Left $ getHelp p)
   where
     ex = buildGenericExample builder
     p = parser ex
 
 prop_withHelp'_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
     runParser (withHelp' p) (pref ++ ["--help"] ++ ys)
     === (Right . Left $ getHelp p)
@@ -819,14 +656,14 @@ prop_withSubHelp_MatchesMain builder =
     p = parser ex
 
 prop_withSubHelp_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   runParser (withSubHelp p) ["--help"] === (Right . Left . getHelp $ withHelp p)
   where
     ex = buildGenericExample builder
     p = parser ex
 
 prop_withSubHelp_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
     runParser (withSubHelp p) (pref ++ ["--help"] ++ ys)
     === (Right . Left . getHelp $ withHelp p)
@@ -847,14 +684,14 @@ prop_withSubHelp'_MatchesMain builder =
     p = parser ex
 
 prop_withSubHelp'_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   runParser (withSubHelp' p) ["--help"] === (Right . Left $ getHelp p)
   where
     ex = buildGenericExample builder
     p = parser ex
 
 prop_withSubHelp'_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
     runParser (withSubHelp' p) (pref ++ ["--help"] ++ ys)
     === (Right . Left $ getHelp p)
@@ -875,7 +712,7 @@ prop_withVersion_MatchesMain s builder =
     p = parser ex
 
 prop_withVersion_MatchesVersion s builder =
-  not ("--version" `member` consumes ex) ==>
+  not ("--version" `member` consumes' ex) ==>
   runParser (withVersion s $ parser ex) ["--version"] === (Right $ Left s)
   where
     ex = buildGenericExample builder
@@ -893,7 +730,7 @@ prop_withVersion'_MatchesMain s builder =
     p = parser ex
 
 prop_withVersion'_MatchesVersion s builder =
-  not ("--version" `member` consumes ex) ==>
+  not ("--version" `member` consumes' ex) ==>
   runParser (withVersion' s $ parser ex) ["--version"] === (Right $ Left s)
   where
     ex = buildGenericExample builder
@@ -909,7 +746,7 @@ prop_beforeDashes_MatchesMain builder =
   where
     ex = buildGenericExample builder
 
--- TODO: make this fail (when p consumes "--"). Right now it doesn't fail
+-- TODO: make this fail (when p consumes' "--"). Right now it doesn't fail
 -- because GenericExample is too limited, all its parsers finish without
 -- waiting for EOF.
 prop_beforeDashes_Matches builder =
@@ -951,7 +788,7 @@ prop_eject_Matches b1 b2 =
 -- TODO: Also check that 'eject' can eject in the middle of a parse.
 
 prop_eject_Ejects b1 b2 (AnyArgs ys) =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser (eject (parser ex1) (parser ex2)) (inputs ex2 ++ ys)
   === (Right . Left $ result ex2)
   where
@@ -966,7 +803,7 @@ prop_eject_EjectsAfter b1 b2 (AnyArgs ys) =
     ex2 = buildGenericExample b2
 
 prop_eject_EjectsMiddle b1 b2 (AnyArgs ys) =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   forAll (concat <$> prefix (blocks ex1)) $ \pref ->
     runParser (eject (parser ex1) (parser ex2)) (pref ++ inputs ex2 ++ ys)
     === (Right . Left $ result ex2)
@@ -986,7 +823,7 @@ prop_eject_EjectsLongAfter b1 (AnyArgs ys) b2 (AnyArgs zs) =
     i1 = inputs ex1
     i2 = inputs ex2
     r2 = result ex2
-    c2 = consumes ex2
+    c2 = consumes' ex2
 
 prop_eject_JoinsHelp b1 b2 =
   getHelp (eject p1 p2) === getHelp p1 <> getHelp p2
@@ -1182,7 +1019,7 @@ prop_parseArgsWithHelp_Returns builder s =
     ex = buildGenericExample builder
 
 prop_parseArgsWithHelp_PrintsHelp builder s =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   runTestIO' (parseArgsWithHelp p) (TestEnv s ["--help"])
   === (TestExitSuccess, (formatHelp . getHelp $ withHelp p) ++ "\n")
   where
@@ -1202,7 +1039,7 @@ prop_withHelpIO_MatchesMain builder =
     ex = buildGenericIOExample builder
 
 prop_withHelpIO_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   join (runParserIO (withHelpIO p) ["--help"]) `sameIO` do
     putStrLn . formatHelp . getHelp $ withHelp p
     exitSuccess
@@ -1222,7 +1059,7 @@ prop_withHelpIO'_MatchesMain builder =
     ex = buildGenericIOExample builder
 
 prop_withHelpIO'_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   join (runParserIO (withHelpIO' p) ["--help"]) `sameIO` do
     putStrLn . formatHelp $ getHelp p
     exitSuccess
@@ -1242,7 +1079,7 @@ prop_withSubHelpIO_MatchesMain builder =
     ex = buildGenericIOExample builder
 
 prop_withSubHelpIO_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   join (runParserIO (withSubHelpIO p) ["--help"]) `sameIO` do
     putStrLn . formatHelp . getHelp $ withHelp p
     exitSuccess
@@ -1262,7 +1099,7 @@ prop_withSubHelpIO'_MatchesMain builder =
     ex = buildGenericIOExample builder
 
 prop_withSubHelpIO'_MatchesHelp builder =
-  not ("--help" `member` consumes ex) ==>
+  not ("--help" `member` consumes' ex) ==>
   join (runParserIO (withSubHelpIO' p) ["--help"]) `sameIO` do
     putStrLn . formatHelp $ getHelp p
     exitSuccess
@@ -1283,7 +1120,7 @@ prop_withVersionIO_MatchesMain s builder =
     p = parser ex
 
 prop_withVersionIO_MatchesVersion s builder =
-  not ("--version" `member` consumes ex) ==>
+  not ("--version" `member` consumes' ex) ==>
   join (runParserIO (withVersionIO s $ parser ex) ["--version"]) `sameIO` do
     putStrLn s
     exitSuccess
@@ -1303,7 +1140,7 @@ prop_withVersionIO'_MatchesMain s builder =
     p = parser ex
 
 prop_withVersionIO'_MatchesVersion s builder =
-  not ("--version" `member` consumes ex) ==>
+  not ("--version" `member` consumes' ex) ==>
   join (runParserIO (withVersionIO' s $ parser ex) ["--version"]) `sameIO` do
     putStrLn s
     exitSuccess
@@ -1401,7 +1238,7 @@ prop_ap_MatchesFar b1 b2 (AnyArgs as) =
     i2 = inputs ex2
     r1 = result ex1
     r2 = result ex2
-    c2 = consumes ex2
+    c2 = consumes' ex2
 
 prop_ap_JoinsHelp b1 b2 =
   getHelp ((,) <$> p1 <*> p2) === getHelp p1 <> getHelp p2
@@ -1445,7 +1282,7 @@ prop_alternative_MatchesFirst b1 b2 =
 -- requirement: parser ex1 shouldn't finish immediately, and also one of the
 -- parsers shouldn't accept EOF.
 prop_alternative_MatchesSecond b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser (parser ex1 <|> parser ex2) (inputs ex2) === Right (result ex2)
   where
     ex1 = buildGenericExample b1
@@ -1475,14 +1312,14 @@ prop_leftAlternative_MatchesFirst b1 b2 =
     ex2 = buildGenericExample b2
 
 prop_leftAlternative_MatchesSecond b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser (parser ex1 <-|> parser ex2) (inputs ex2) === Right (result ex2)
   where
     ex1 = buildGenericExample b1
     ex2 = buildGenericExample b2
 
 prop_leftAlternative_MatchesMiddle b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 && (not . null $ blocks ex1) ==>
+  consumes' ex1 `disjoint` consumes' ex2 && (not . null $ blocks ex1) ==>
   forAll (concat <$> properPrefix (blocks ex1)) $ \pref ->
     runParser (parser ex1 <-|> parser ex2) (pref ++ inputs ex2)
     === Right (result ex2)
@@ -1514,14 +1351,14 @@ prop_rightAlternative_MatchesFirst b1 b2 =
     ex2 = buildGenericExample b2
 
 prop_rightAlternative_MatchesSecond b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser (parser ex1 <|-> parser ex2) (inputs ex2) === Right (result ex2)
   where
     ex1 = buildGenericExample b1
     ex2 = buildGenericExample b2
 
 prop_rightAlternative_MatchesMiddle b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 && (not . null $ blocks ex2) ==>
+  consumes' ex1 `disjoint` consumes' ex2 && (not . null $ blocks ex2) ==>
   forAll (concat <$> properPrefix (blocks ex2)) $ \pref ->
     runParser (parser ex1 <|-> parser ex2) (pref ++ inputs ex1)
     === Right (result ex1)
@@ -1572,7 +1409,7 @@ prop_parallel_DirectOrder b1 b2 =
     ex2 = buildGenericExample b2
 
 prop_parallel_ReverseOrder b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser ((,) <$> parser ex1 <#> parser ex2) (inputs ex2 ++ inputs ex1)
   === Right (result ex1, result ex2)
   where
@@ -1592,7 +1429,7 @@ prop_parallel_DirectOrderFar b1 b2 (AnyArgs as) =
     i2 = inputs ex2
     r1 = result ex1
     r2 = result ex2
-    c2 = consumes ex2
+    c2 = consumes' ex2
 
 prop_parallel_ReverseOrderFar b1 b2 (AnyArgs as) =
   c1 `disjoint` c2 && not (any (`member` c1) as) ==>
@@ -1607,11 +1444,11 @@ prop_parallel_ReverseOrderFar b1 b2 (AnyArgs as) =
     i2 = inputs ex2
     r1 = result ex1
     r2 = result ex2
-    c1 = consumes ex1
-    c2 = consumes ex2
+    c1 = consumes' ex1
+    c2 = consumes' ex2
 
 prop_parallel_Mix b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   forAll (concat <$> mix (blocks ex1) (blocks ex2)) $ \inputs ->
     runParser ((,) <$> parser ex1 <#> parser ex2) inputs
     === Right (result ex1, result ex2)
@@ -1634,7 +1471,7 @@ prop_leftParallel_Matches b1 b2 =
     ex2 = buildGenericExample b2
 
 prop_leftParallel_NotMatchesReverse b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   isLeft $ runParser ((,) <$> p1 <-#> p2) (i2 ++ i1)
   where
     ex1 = buildGenericExample b1
@@ -1647,7 +1484,7 @@ prop_leftParallel_NotMatchesReverse b1 b2 =
 -- TODO: Make this fail by improving GenericExample (if parser ex1 accepts
 -- EOF).
 prop_leftParallel_MatchesInterrupting b1 b2 x =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser ((,) <$> (parser ex1 <|> orElse x) <-#> parser ex2) (inputs ex2)
   === Right (x, result ex2)
   where
@@ -1655,7 +1492,7 @@ prop_leftParallel_MatchesInterrupting b1 b2 x =
     ex2 = buildGenericExample b2
 
 prop_leftParallel_FinishesInterrupting b1 b2 x (AnyArg y) =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser (((,) <$> (p1 <|> orElse x) <-#> p2) *> args) (i2 ++ [y])
   === Right [y]
   where
@@ -1673,7 +1510,7 @@ prop_leftParallel_JoinsHelp b1 b2 =
 
 
 prop_rightParallel_Matches b1 b2 =
-  consumes ex1 `disjoint` consumes ex2 ==>
+  consumes' ex1 `disjoint` consumes' ex2 ==>
   runParser ((,) <$> parser ex1 <#-> parser ex2) (inputs ex2 ++ inputs ex1)
   === Right (result ex1, result ex2)
   where
@@ -1818,22 +1655,12 @@ prop_perm_Matches bs =
     ps = map parser es
     is = map inputs es
     rs = map result es
-    cs = map consumes es
+    cs = map consumes' es
 
 prop_perm_JoinsHelp bs =
   getHelp (perm ps) === foldMap getHelp ps
   where
     ps = map (parser . buildGenericExample) bs
-
-prop_Matches (AnyParser pDesc p) =
-  forAllExamples pDesc $ \i o ->
-    runParser p i === Right o
-
-prop_Empty (AnyParser _ p) =
-  isLeft' $ runParser p []
-
-prop_OrElse (AnyParser _ p) x =
-  runParser (p <|> orElse x) [] === Right x
 
 -- TODO: Improve tests for 'many', 'some', 'between' by generating multiple
 --       valid inputs for the same parser.
