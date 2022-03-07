@@ -24,9 +24,11 @@ import Test.QuickCheck
   ( Arbitrary(..)
   , Gen
   , Property
+  , Testable
   , choose
   , counterexample
   , elements
+  , forAllShrinkShow
   , frequency
   , genericShrink
   , ioProperty
@@ -348,7 +350,7 @@ data ValueType
 
 instance Arbitrary ValueType where
   arbitrary = elements [TypeString, TypeReadInt, TypeChar]
-
+ 
   shrink TypeString = []
   shrink _ = [TypeString]
 
@@ -505,12 +507,13 @@ formatValue (ValueString s) = s
 formatValue (ValueReadInt i) = show i
 formatValue (ValueChar c) = [c]
 
+arbitraryValue :: ValueType -> Gen Value
+arbitraryValue TypeString = ValueString <$> arbitraryArg
+arbitraryValue TypeReadInt = ValueReadInt <$> arbitrary
+arbitraryValue TypeChar = ValueChar <$> arbitraryChar
+
 instance Arbitrary Value where
-  arbitrary = oneof
-    [ ValueString <$> arbitraryArg
-    , ValueReadInt <$> arbitrary
-    , ValueChar <$> arbitraryChar
-    ]
+  arbitrary = arbitrary >>= arbitraryValue
 
   shrink x@(ValueString _) = genericShrink x
   shrink x = ValueString (formatValue x):genericShrink x
@@ -555,11 +558,11 @@ isFree _ = True
 
 
 -- | An example of a parse that should succeed.
-data Example a = Example
+data Example' a = Example'
   { parser :: Parser a
     -- ^ Parser under test.
   , blocks :: [[String]]
-    -- ^ Example sequence of input arguments that the parser should
+    -- ^ Example' sequence of input arguments that the parser should
     -- successfully consume. Split into separate blocks, each block being an
     -- argument possibly followed by more arguments consumed by a 'Follower'.
   , result :: a
@@ -570,22 +573,22 @@ data Example a = Example
     -- to this set.
   }
 
-instance Functor Example where
-  fmap f (Example p i r c) = Example (fmap f p) i (f r) c
+instance Functor Example' where
+  fmap f (Example' p i r c) = Example' (fmap f p) i (f r) c
 
-inputs :: Example a -> [String]
+inputs :: Example' a -> [String]
 inputs = concat . blocks
 
-buildMatchExample :: String -> Example String
-buildMatchExample s = Example
+buildMatchExample :: String -> Example' String
+buildMatchExample s = Example'
   { parser = match s
   , blocks = [[s]]
   , result = s
   , consumes = singleton s
   }
 
-buildMatchShortExample :: Char -> Example Char
-buildMatchShortExample c = Example
+buildMatchShortExample :: Char -> Example' Char
+buildMatchShortExample c = Example'
   { parser = matchShort c
   , blocks = [[['-', c]]]
   , result = c
@@ -601,9 +604,9 @@ instance Arbitrary MAFExample where
   arbitrary = MAFExample <$> arbitraryArg <*> arbitrary
   shrink = genericShrink
 
-buildMAFExample :: MAFExample -> Example [String]
+buildMAFExample :: MAFExample -> Example' [String]
 buildMAFExample (MAFExample s pairs)
-  = Example
+  = Example'
   { parser = matchAndFollow s follower
   , blocks = [s:xs]
   , result = xs
@@ -622,9 +625,9 @@ instance Arbitrary FlagExample where
   arbitrary = FlagExample <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
-buildFlagExample :: FlagExample -> Example ()
+buildFlagExample :: FlagExample -> Example' ()
 buildFlagExample (FlagExample help bundling fs)
-  = Example
+  = Example'
   { parser = mkFlag help bundling (allForms fs)
   , blocks = [[chosenForm fs]]
   , result = ()
@@ -673,9 +676,9 @@ peValue (ParamExample _ _ _ val) = val
 peValue (ParamShortExample _ _ _ (NonEmptyValue val)) = val
 peValue (ParamLongExample _ _ _ val) = val
 
-buildParamExample :: ParamExample -> Example String
+buildParamExample :: ParamExample -> Example' String
 buildParamExample (ParamExample help fs metavar val)
-  = Example
+  = Example'
   { parser = mkParam help (valueType val) forms metavar
   , blocks = [[chosenForm fs, x]]
   , result = x
@@ -704,9 +707,9 @@ instance Arbitrary FreeArgExample where
   arbitrary = FreeArgExample <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
-buildFreeArgExample :: FreeArgExample -> Example String
+buildFreeArgExample :: FreeArgExample -> Example' String
 buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
-  = Example
+  = Example'
   { parser = mkFreeArg help (valueType val) metavar
   , blocks = [[x]]
   , result = x
@@ -730,9 +733,9 @@ mkFollowerExample pairs = (f, xs) where
   f = mkFollower [(valueType val, metavar) | (metavar, val) <- pairs]
   xs = [formatValue val | (_, val) <- pairs]
 
-buildMultiParamExample :: MultiParamExample -> Example [String]
+buildMultiParamExample :: MultiParamExample -> Example' [String]
 buildMultiParamExample (MultiParamExample helpChoice fs pairs)
-  = Example
+  = Example'
   { parser = mkMultiParam helpChoice (allForms fs) f
   , blocks = [chosenForm fs:xs]
   , result = xs
@@ -812,7 +815,7 @@ instance Arbitrary AtomicExample where
     ++ (map AtomicParam $ atomicToParam e)
     ++ genericShrink e
 
-buildAtomicExample :: AtomicExample -> Example String
+buildAtomicExample :: AtomicExample -> Example' String
 buildAtomicExample (AtomicMatch (AnyArg s)) = buildMatchExample s
 buildAtomicExample (AtomicMAF x) = concat <$> buildMAFExample x
 buildAtomicExample (AtomicMatchShort (AnyChar c)) =
@@ -844,10 +847,10 @@ instance Arbitrary GenericExample where
   shrink e = (map GenericAtomic $ genericToAtomic e)
     ++ genericShrink e
 
-buildGenericExample :: GenericExample -> Example String
+buildGenericExample :: GenericExample -> Example' String
 buildGenericExample (GenericAtomic x) = buildAtomicExample x
 buildGenericExample (GenericAp x y)
-  = Example
+  = Example'
   { parser = (++) <$> parser ex1 <*> parser ex2
   , blocks = blocks ex1 ++ blocks ex2
   , result = result ex1 ++ result ex2
@@ -862,9 +865,8 @@ buildGenericExample (GenericAp x y)
 -- input for a successful parse.
 type GenericIOExample = GenericExample
 
-buildGenericIOExample :: GenericIOExample -> Example (TestIO String)
+buildGenericIOExample :: GenericIOExample -> Example' (TestIO String)
 buildGenericIOExample = fmap return . buildGenericExample
-
 
 
 
@@ -1122,4 +1124,84 @@ instance Arbitrary ParserDesc where
     ++ [DescFreeArg vt mv' h | mv' <- shrink mv]
     ++ [DescFreeArg vt mv h' | h' <- shrink h]
 
+
+-- | Convenience datatype wrapping a parser together with its description.
+-- Meant to be used as a function argument for QuickCheck properties.
+data AnyParser = AnyParser ParserDesc (Parser String)
+
+instance Show AnyParser where
+  showsPrec p (AnyParser desc _) = showsPrec p desc
+
+instance Arbitrary AnyParser where
+  arbitrary = fmap (\d -> AnyParser d (toParser d)) arbitrary
+  shrink (AnyParser d _) = [AnyParser d' (toParser d') | d' <- shrink d]
+
+
+-- | Represents an input example for a parser that's expected to succeed.
+data Example
+  = ExMatch String String
+  | ExMAF String [Value]
+  | ExParamShort String Value
+  | ExParamLong String Value
+  | ExFree Value
+  deriving Show
+
+input :: Example -> [String]
+input (ExMatch i _) = [i]
+input (ExMAF s vs) = s:map formatValue vs
+input (ExParamShort s v) = [s ++ formatValue v]
+input (ExParamLong s v) = [s ++ "=" ++ formatValue v]
+input (ExFree v) = [formatValue v]
+
+output :: Example -> String
+output (ExMatch _ o) = o
+output (ExMAF _ vs) = concat $ map formatValue vs
+output (ExParamShort _ v) = formatValue v
+output (ExParamLong _ v) = formatValue v
+output (ExFree v) = formatValue v
+
+arbitraryEx :: ParserDesc -> Gen Example
+arbitraryEx (DescMatch s) = pure $ ExMatch s s
+arbitraryEx (DescMAF s (DescFollower ns)) =
+  ExMAF s <$> sequenceA [arbitraryValue vt | DescNext vt _ <- ns]
+arbitraryEx (DescMatchShort c) = pure $ ExMatch ['-', c] [c]
+arbitraryEx (DescFlag _ fs _) = ExMatch <$> elements fs <*> pure ""
+arbitraryEx (DescParam vt fs _ _) = do
+  form <- elements fs
+  case form of
+    ('-':c:[]) | c /= '-' -> oneof
+      [ ExMAF form <$> sequenceA [arbitraryValue vt]
+      , ExParamShort form <$> arbitraryValue vt
+      ]
+    ('-':'-':_:_) -> oneof
+      [ ExMAF form <$> sequenceA [arbitraryValue vt]
+      , ExParamLong form <$> arbitraryValue vt
+      ]
+    _ -> error "illegal option form in arbitraryEx"
+arbitraryEx (DescMultiParam fs (DescFollower ns) _) = do
+  form <- elements fs
+  vs <- sequenceA [arbitraryValue vt | DescNext vt _ <- ns]
+  return $ ExMAF form vs
+arbitraryEx (DescFreeArg vt _ _) =
+  ExFree <$> (arbitraryValue vt `suchThat` (isFree . formatValue))
+
+shrinkEx :: Example -> [Example]
+shrinkEx (ExMatch _ _) = []
+shrinkEx (ExMAF s vs) = [ExMAF s vs' | vs' <- traverse genericShrink vs]
+shrinkEx (ExParamShort s v) = [ExParamShort s v' | v' <- genericShrink v]
+shrinkEx (ExParamLong s v) = [ExParamLong s v' | v' <- genericShrink v]
+shrinkEx (ExFree v) =
+  [ExFree v' | v' <- genericShrink v, isFree $ formatValue v']
+
+forAllEx :: Testable t => ParserDesc -> (Example -> t) -> Property
+forAllEx parserDesc = forAllShrinkShow gen shrinkEx showf where
+  gen = arbitraryEx parserDesc
+  showf = show . input
+
+-- | Convenience wrapper around 'forAllEx'.
+forAllExamples :: Testable t
+               => ParserDesc
+               -> ([String] -> String -> t)
+               -> Property
+forAllExamples parserDesc f = forAllEx parserDesc $ \ex -> f (input ex) (output ex)
 

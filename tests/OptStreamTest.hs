@@ -417,6 +417,10 @@ tests =
     [ testProperty "Matches"   prop_perm_Matches
     , testProperty "JoinsHelp" prop_perm_JoinsHelp
     ]
+
+  , testProperty "Matches" prop_Matches
+  , testProperty "Empty" prop_Empty
+  , testProperty "OrElse" prop_OrElse
   ]
 
 
@@ -1821,8 +1825,15 @@ prop_perm_JoinsHelp bs =
   where
     ps = map (parser . buildGenericExample) bs
 
-prop_blah (_ :: Int, _ :: String) = True
+prop_Matches (AnyParser pDesc p) =
+  forAllExamples pDesc $ \i o ->
+    runParser p i === Right o
 
+prop_Empty (AnyParser _ p) =
+  isLeft' $ runParser p []
+
+prop_OrElse (AnyParser _ p) x =
+  runParser (p <|> orElse x) [] === Right x
 
 -- TODO: Improve tests for 'many', 'some', 'between' by generating multiple
 --       valid inputs for the same parser.
