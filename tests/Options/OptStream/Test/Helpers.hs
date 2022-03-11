@@ -292,27 +292,6 @@ instance Arbitrary Forms where
   shrink fs = shrinkForms shrinkLegal fs ++ chooseLeft fs ++ chooseRight fs
 
 
--- | Represents a list of legal option forms with one of them selected. It is
--- guaranteed that the selected one is always a short form.
-newtype FormsS = ChosenShort Forms
-  deriving Show
-
-instance Arbitrary FormsS where
-  arbitrary = ChosenShort <$> arbitraryForms arbitraryShort
-
-  shrink (ChosenShort fs) =
-    [ChosenShort fs' | fs' <- shrinkForms shrinkShort fs]
-
-
--- | Represents a list of legal option forms with one of them selected. It is
--- guaranteed that the selected one is always a long form.
-newtype FormsL = ChosenLong Forms
-  deriving Show
-
-instance Arbitrary FormsL where
-  arbitrary = ChosenLong <$> arbitraryForms arbitraryLong
-  shrink (ChosenLong fs) = [ChosenLong fs' | fs' <- shrinkForms shrinkLong fs]
-
 
 -- | Represents a list of option forms where all of them are legal except one.
 -- The illegal form is also the selected one.
@@ -350,9 +329,39 @@ data ValueType
 
 instance Arbitrary ValueType where
   arbitrary = elements [TypeString, TypeReadInt, TypeChar]
- 
+
   shrink TypeString = []
   shrink _ = [TypeString]
+
+
+-- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or
+-- 'next'.
+data Value
+  = ValueString String
+  | ValueReadInt Int
+  | ValueChar Char
+  deriving (Show, Generic)
+
+valueType :: Value -> ValueType
+valueType (ValueString _) = TypeString
+valueType (ValueReadInt _) = TypeReadInt
+valueType (ValueChar _) = TypeChar
+
+formatValue :: Value -> String
+formatValue (ValueString s) = s
+formatValue (ValueReadInt i) = show i
+formatValue (ValueChar c) = [c]
+
+arbitraryValue :: ValueType -> Gen Value
+arbitraryValue TypeString = ValueString <$> arbitraryArg
+arbitraryValue TypeReadInt = ValueReadInt <$> arbitrary
+arbitraryValue TypeChar = ValueChar <$> arbitraryChar
+
+instance Arbitrary Value where
+  arbitrary = arbitrary >>= arbitraryValue
+
+  shrink x@(ValueString _) = genericShrink x
+  shrink x = ValueString (formatValue x):genericShrink x
 
 
 -- | Represents a choice between flags with and without bundling, e.g. 'flag'
@@ -489,388 +498,7 @@ instance Arbitrary AnyChars where
 
 
 
--- | Represents a test value to be parsed with e.g. 'param', 'freeArg', or
--- 'next'.
-data Value
-  = ValueString String
-  | ValueReadInt Int
-  | ValueChar Char
-  deriving (Show, Generic)
-
-valueType :: Value -> ValueType
-valueType (ValueString _) = TypeString
-valueType (ValueReadInt _) = TypeReadInt
-valueType (ValueChar _) = TypeChar
-
-formatValue :: Value -> String
-formatValue (ValueString s) = s
-formatValue (ValueReadInt i) = show i
-formatValue (ValueChar c) = [c]
-
-arbitraryValue :: ValueType -> Gen Value
-arbitraryValue TypeString = ValueString <$> arbitraryArg
-arbitraryValue TypeReadInt = ValueReadInt <$> arbitrary
-arbitraryValue TypeChar = ValueChar <$> arbitraryChar
-
-instance Arbitrary Value where
-  arbitrary = arbitrary >>= arbitraryValue
-
-  shrink x@(ValueString _) = genericShrink x
-  shrink x = ValueString (formatValue x):genericShrink x
-
-
--- | Like 'Value' but with a restriction that the value's string representation
--- is not empty.
-newtype NonEmptyValue = NonEmptyValue Value
-  deriving Show
-
-instance Arbitrary NonEmptyValue where
-  arbitrary = NonEmptyValue
-    <$> (arbitrary `suchThat` (not . P.null . formatValue))
-
-  shrink (NonEmptyValue x) =
-    [ NonEmptyValue x'
-    | x' <- shrink x
-    , not . P.null $ formatValue x'
-    ]
-
-
--- | Like 'Value' but with a restriction that the value's string representation
--- doesn't start with @-@.
-newtype FreeValue = FreeValue { unFreeValue :: Value }
-  deriving Show
-
-instance Arbitrary FreeValue where
-  arbitrary = FreeValue <$> (arbitrary `suchThat` (isFree . formatValue))
-
-  shrink (FreeValue x) =
-    [ FreeValue x'
-    | x' <- shrink x
-    , isFree $ formatValue x'
-    ]
-
-isFree :: String -> Bool
-isFree ('-':_) = False
-isFree _ = True
-
-
--- ** Full parse examples
-
-
--- | An example of a parse that should succeed.
-data Example' a = Example'
-  { parser :: Parser a
-    -- ^ Parser under test.
-  , blocks :: [[String]]
-    -- ^ Example' sequence of input arguments that the parser should
-    -- successfully consume. Split into separate blocks, each block being an
-    -- argument possibly followed by more arguments consumed by a 'Follower'.
-  , result :: a
-    -- ^ The value that the parser should produce.
-  , consumes' :: ArgLanguage
-    -- ^ A set containing (at least) all the strings the parser is supposed to
-    -- be willing to consume. The parser should skip any string not belonging
-    -- to this set.
-  }
-
-instance Functor Example' where
-  fmap f (Example' p i r c) = Example' (fmap f p) i (f r) c
-
-inputs :: Example' a -> [String]
-inputs = concat . blocks
-
-buildMatchExample :: String -> Example' String
-buildMatchExample s = Example'
-  { parser = match s
-  , blocks = [[s]]
-  , result = s
-  , consumes' = singleton s
-  }
-
-buildMatchShortExample :: Char -> Example' Char
-buildMatchShortExample c = Example'
-  { parser = matchShort c
-  , blocks = [[['-', c]]]
-  , result = c
-  , consumes' = singleton ['-', c]
-  }
-
-
--- | Represents an example of a successful parse with 'matchAndFollow'.
-data MAFExample = MAFExample String [(Metavar, Value)]
-  deriving (Show, Generic)
-
-instance Arbitrary MAFExample where
-  arbitrary = MAFExample <$> arbitraryArg <*> arbitrary
-  shrink = genericShrink
-
-buildMAFExample :: MAFExample -> Example' [String]
-buildMAFExample (MAFExample s pairs)
-  = Example'
-  { parser = matchAndFollow s follower
-  , blocks = [s:xs]
-  , result = xs
-  , consumes' = singleton s
-  }
-  where
-    (follower, xs) = mkFollowerExample pairs
-
-
--- | Represents an example where a specific @flag*@ parser should match a
--- specific block of arguments.
-data FlagExample = FlagExample HelpChoice Bundling Forms
-  deriving (Show, Generic)
-
-instance Arbitrary FlagExample where
-  arbitrary = FlagExample <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
-
-buildFlagExample :: FlagExample -> Example' ()
-buildFlagExample (FlagExample help bundling fs)
-  = Example'
-  { parser = mkFlag help bundling (allForms fs)
-  , blocks = [[chosenForm fs]]
-  , result = ()
-  , consumes' = mconcat . map singleton $ allForms fs
-  }
-
-
--- | Represents an example where a specific @param*@ parser should match a
--- specific block of arguments.
-data ParamExample
-  = ParamExample HelpChoice Forms Metavar Value
-  | ParamShortExample HelpChoice FormsS Metavar NonEmptyValue
-  | ParamLongExample HelpChoice FormsL Metavar Value
-  deriving (Show, Generic)
-
-instance Arbitrary ParamExample where
-  arbitrary = oneof
-    [ ParamExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-    , ParamShortExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-    , ParamLongExample <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-    ]
-
-  shrink e@(ParamShortExample help (ChosenShort fs) mv (NonEmptyValue val)) =
-    ParamExample help fs mv val:genericShrink e
-  shrink e@(ParamLongExample help (ChosenLong fs) mv val) =
-    ParamExample help fs mv val:genericShrink e
-  shrink e = genericShrink e
-
-peHelp :: ParamExample -> HelpChoice
-peHelp (ParamExample help _ _ _) = help
-peHelp (ParamShortExample help _ _ _) = help
-peHelp (ParamLongExample help _ _ _) = help
-
-peForms :: ParamExample -> Forms
-peForms (ParamExample _ fs _ _) = fs
-peForms (ParamShortExample _ (ChosenShort fs) _ _) = fs
-peForms (ParamLongExample _ (ChosenLong fs) _ _) = fs
-
-peMetavar :: ParamExample -> Metavar
-peMetavar (ParamExample _ _ metavar _) = metavar
-peMetavar (ParamShortExample _ _ metavar _) = metavar
-peMetavar (ParamLongExample _ _ metavar _) = metavar
-
-peValue :: ParamExample -> Value
-peValue (ParamExample _ _ _ val) = val
-peValue (ParamShortExample _ _ _ (NonEmptyValue val)) = val
-peValue (ParamLongExample _ _ _ val) = val
-
-buildParamExample :: ParamExample -> Example' String
-buildParamExample (ParamExample help fs metavar val)
-  = Example'
-  { parser = mkParam help (valueType val) forms metavar
-  , blocks = [[chosenForm fs, x]]
-  , result = x
-  , consumes' = mconcat $ map withPrefix forms
-  }
-  where
-    forms = allForms fs
-    x = formatValue val
-
-buildParamExample
-  (ParamShortExample help (ChosenShort fs) metavar (NonEmptyValue val))
-  = (buildParamExample $ ParamExample help fs metavar val)
-  { blocks = [[chosenForm fs ++ formatValue val]] }
-
-buildParamExample (ParamLongExample help (ChosenLong fs) metavar val)
-  = (buildParamExample $ ParamExample help fs metavar val)
-  { blocks = [[chosenForm fs ++ "=" ++ formatValue val]] }
-
-
--- | Represents an example where a @freeArg*@ parser should match a specific
--- command line argument.
-data FreeArgExample = FreeArgExample HelpChoice Metavar FreeValue
-  deriving (Show, Generic)
-
-instance Arbitrary FreeArgExample where
-  arbitrary = FreeArgExample <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
-
-buildFreeArgExample :: FreeArgExample -> Example' String
-buildFreeArgExample (FreeArgExample help metavar (FreeValue val))
-  = Example'
-  { parser = mkFreeArg help (valueType val) metavar
-  , blocks = [[x]]
-  , result = x
-  , consumes' = freeArgs
-  }
-  where
-    x = formatValue val
-
-
--- | Represents an example where a @multiParam*@ parser should match a specific
--- block of command line arguments.
-data MultiParamExample = MultiParamExample HelpChoice Forms [(Metavar, Value)]
-  deriving (Show, Generic)
-
-instance Arbitrary MultiParamExample where
-  arbitrary = MultiParamExample <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink = genericShrink
-
-mkFollowerExample :: [(Metavar, Value)] -> (Follower [String], [String])
-mkFollowerExample pairs = (f, xs) where
-  f = mkFollower [(valueType val, metavar) | (metavar, val) <- pairs]
-  xs = [formatValue val | (_, val) <- pairs]
-
-buildMultiParamExample :: MultiParamExample -> Example' [String]
-buildMultiParamExample (MultiParamExample helpChoice fs pairs)
-  = Example'
-  { parser = mkMultiParam helpChoice (allForms fs) f
-  , blocks = [chosenForm fs:xs]
-  , result = xs
-  , consumes' = mconcat . map singleton $ allForms fs
-  }
-  where
-    (f, xs) = mkFollowerExample pairs
-
-
--- | Represents an example of a successful parse with any atomic parser without
--- 'orElse'.
-data AtomicExample
-  = AtomicMatch AnyArg
-  | AtomicMAF MAFExample
-  | AtomicMatchShort AnyChar
-  | AtomicFlag FlagExample
-  | AtomicParam ParamExample
-  | AtomicFreeArg FreeArgExample
-  | AtomicMultiParam MultiParamExample
-  deriving (Show, Generic)
-
-atomicToMatch :: AtomicExample -> [AnyArg]
-atomicToMatch (AtomicMAF (MAFExample s _)) =
-  [AnyArg s]
-atomicToMatch (AtomicMatchShort (AnyChar c)) =
-  [AnyArg ['-', c]]
-atomicToMatch (AtomicFlag (FlagExample _ _ fs)) =
-  [AnyArg $ chosenForm fs]
-atomicToMatch (AtomicParam p) =
-  [AnyArg . chosenForm $ peForms p]
-atomicToMatch (AtomicFreeArg (FreeArgExample _ _ (FreeValue val))) =
-  [AnyArg $ formatValue val]
-atomicToMatch (AtomicMultiParam (MultiParamExample _ fs _)) =
-  [AnyArg $ chosenForm fs]
-atomicToMatch _ = []
-
-atomicToMAF :: AtomicExample -> [MAFExample]
-atomicToMAF (AtomicParam p) =
-  [MAFExample (chosenForm $ peForms p) [(peMetavar p, peValue p)]]
-atomicToMAF (AtomicMultiParam (MultiParamExample _ fs pairs)) =
-  [MAFExample (chosenForm fs) pairs]
-atomicToMAF _ = []
-
-atomicToMatchShort :: AtomicExample -> [AnyChar]
-atomicToMatchShort (AtomicFlag (FlagExample _ _ (Forms _ ['-', c] _))) =
-  [AnyChar c]
-atomicToMatchShort _ = []
-
-atomicToFlag :: AtomicExample -> [FlagExample]
-atomicToFlag (AtomicParam p) =
-  [FlagExample (peHelp p) WithoutBundling (peForms p)]
-atomicToFlag (AtomicMultiParam (MultiParamExample help fs _)) =
-  [FlagExample help WithoutBundling fs]
-atomicToFlag _ = []
-
-atomicToParam :: AtomicExample -> [ParamExample]
-atomicToParam
-  (AtomicMultiParam (MultiParamExample help fs ((metavar, val):_))) =
-  [ParamExample help fs metavar val]
-atomicToParam _ = []
-
-instance Arbitrary AtomicExample where
-  arbitrary = oneof
-    [ AtomicMatch <$> arbitrary
-    , AtomicMAF <$> arbitrary
-    , AtomicMatchShort <$> arbitrary
-    , AtomicFlag <$> arbitrary
-    , AtomicParam <$> arbitrary
-    , AtomicFreeArg <$> arbitrary
-    , AtomicMultiParam <$> arbitrary
-    ]
-
-  shrink e = (map AtomicMatch $ atomicToMatch e)
-    ++ (map AtomicMAF $ atomicToMAF e)
-    ++ (map AtomicMatchShort $ atomicToMatchShort e)
-    ++ (map AtomicFlag $ atomicToFlag e)
-    ++ (map AtomicParam $ atomicToParam e)
-    ++ genericShrink e
-
-buildAtomicExample :: AtomicExample -> Example' String
-buildAtomicExample (AtomicMatch (AnyArg s)) = buildMatchExample s
-buildAtomicExample (AtomicMAF x) = concat <$> buildMAFExample x
-buildAtomicExample (AtomicMatchShort (AnyChar c)) =
-  (:[]) <$> buildMatchShortExample c
-buildAtomicExample (AtomicFlag x) = "" <$ buildFlagExample x
-buildAtomicExample (AtomicParam x) = buildParamExample x
-buildAtomicExample (AtomicFreeArg x) = buildFreeArgExample x
-buildAtomicExample (AtomicMultiParam x) = concat <$> buildMultiParamExample x
-
--- TODO: include pure in generic examples.
--- TODO: include eof in generic examples.
--- | Represents a generic 'Parser' for testing, together with an example input
--- for a successful parse.
-data GenericExample
- = GenericAtomic AtomicExample
- | GenericAp AtomicExample GenericExample
- deriving (Show, Generic)
-
-genericToAtomic :: GenericExample -> [AtomicExample]
-genericToAtomic (GenericAp x _) = [x]
-genericToAtomic _ = []
-
-instance Arbitrary GenericExample where
-  arbitrary = oneof
-    [ GenericAtomic <$> arbitrary
-    , GenericAp <$> arbitrary <*> arbitrary
-    ]
-
-  shrink e = (map GenericAtomic $ genericToAtomic e)
-    ++ genericShrink e
-
-buildGenericExample :: GenericExample -> Example' String
-buildGenericExample (GenericAtomic x) = buildAtomicExample x
-buildGenericExample (GenericAp x y)
-  = Example'
-  { parser = (++) <$> parser ex1 <*> parser ex2
-  , blocks = blocks ex1 ++ blocks ex2
-  , result = result ex1 ++ result ex2
-  , consumes' = consumes' ex1 `union` consumes' ex2
-  }
-  where
-    ex1 = buildAtomicExample x
-    ex2 = buildGenericExample y
-
-
--- | Represents a generic IO-style parser for testing, together with an example
--- input for a successful parse.
-type GenericIOExample = GenericExample
-
-buildGenericIOExample :: GenericIOExample -> Example' (TestIO String)
-buildGenericIOExample = fmap return . buildGenericExample
-
-
-
--- * New style of generic examples
+-- * Generating parsers.
 
 -- | Precedence of function application.
 appPrec :: Int
@@ -1178,13 +806,16 @@ data Example
   | ExAp Example Example
   deriving Show
 
+blocks :: Example -> [[String]]
+blocks (ExMatch i _) = [[i]]
+blocks (ExMAF s vs) = [s:map formatValue vs]
+blocks (ExParamShort s v) = [[s ++ formatValue v]]
+blocks (ExParamLong s v) = [[s ++ "=" ++ formatValue v]]
+blocks (ExFree v) = [[formatValue v]]
+blocks (ExAp l r) = blocks l ++ blocks r
+
 input :: Example -> [String]
-input (ExMatch i _) = [i]
-input (ExMAF s vs) = s:map formatValue vs
-input (ExParamShort s v) = [s ++ formatValue v]
-input (ExParamLong s v) = [s ++ "=" ++ formatValue v]
-input (ExFree v) = [formatValue v]
-input (ExAp l r) = input l ++ input r
+input = concat . blocks
 
 output :: Example -> String
 output (ExMatch _ o) = o
@@ -1193,6 +824,10 @@ output (ExParamShort _ v) = formatValue v
 output (ExParamLong _ v) = formatValue v
 output (ExFree v) = formatValue v
 output (ExAp l r) = output l ++ output r
+
+isFree :: String -> Bool
+isFree ('-':_) = False
+isFree _ = True
 
 arbitraryEx :: ParserDesc -> Gen Example
 arbitraryEx (DescMatch s) = pure $ ExMatch s s
@@ -1205,7 +840,8 @@ arbitraryEx (DescParam vt fs _ _) = do
   case form of
     ('-':c:[]) | c /= '-' -> oneof
       [ ExMAF form <$> sequenceA [arbitraryValue vt]
-      , ExParamShort form <$> arbitraryValue vt
+      , ExParamShort form
+        <$> (arbitraryValue vt `suchThat` (not . P.null . formatValue))
       ]
     ('-':'-':_:_) -> oneof
       [ ExMAF form <$> sequenceA [arbitraryValue vt]
@@ -1226,7 +862,8 @@ arbitraryEx (DescAp l r) =
 shrinkEx :: Example -> [Example]
 shrinkEx (ExMatch _ _) = []
 shrinkEx (ExMAF s vs) = [ExMAF s vs' | vs' <- traverse genericShrink vs]
-shrinkEx (ExParamShort s v) = [ExParamShort s v' | v' <- genericShrink v]
+shrinkEx (ExParamShort s v) =
+  [ExParamShort s v' | v' <- genericShrink v, not . P.null $ formatValue v']
 shrinkEx (ExParamLong s v) = [ExParamLong s v' | v' <- genericShrink v]
 shrinkEx (ExFree v) =
   [ExFree v' | v' <- genericShrink v, isFree $ formatValue v']
@@ -1242,5 +879,16 @@ forAllExamples :: Testable t
                => ParserDesc
                -> ([String] -> String -> t)
                -> Property
-forAllExamples parserDesc f = forAllEx parserDesc $ \ex -> f (input ex) (output ex)
+forAllExamples desc f = forAllEx desc $ \ex -> f (input ex) (output ex)
+
+shrinkElements :: (a -> [a]) -> [a] -> [[a]]
+shrinkElements f as = work [] as where
+  work ls [] = []
+  work ls (r:rs) = [reverse ls ++ (r':rs) | r' <- f r] ++ work (r:ls) rs
+
+forAllExs :: Testable t => [ParserDesc] -> ([Example] -> t) -> Property
+forAllExs parserDescs = forAllShrinkShow gen shrinkf showf where
+  gen = traverse arbitraryEx parserDescs
+  shrinkf = shrinkElements shrinkEx
+  showf = show . map input
 

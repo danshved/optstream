@@ -19,7 +19,7 @@ import Data.List
 import Prelude hiding (putStrLn)
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
-import Test.QuickCheck
+import Test.QuickCheck hiding (output)
 
 import Options.OptStream
 import Options.OptStream.Help
@@ -408,16 +408,16 @@ shorts = many (short "" Just)
 
 prop_Matches (AnyParser p_ p) =
   forAllExamples p_ $ \i o ->
-    runParser p i === Right o
+  runParser p i === Right o
 
 prop_Finishes (AnyParser p_ p) (AnyArg x) =
   forAllExamples p_ $ \i o ->
-    runParser (p *> args) (i ++ [x]) === Right [x]
+  runParser (p *> args) (i ++ [x]) === Right [x]
 
 prop_Skips (AnyParser p_ p) (AnyArg x) =
   not (x `member` consumes p_) ==>
   forAllExamples p_ $ \i _ ->
-    runParser (p #> args) (x:i) === Right [x]
+  runParser (p #> args) (x:i) === Right [x]
 
 prop_Empty (AnyParser _ p) =
   isLeft' $ runParser p []
@@ -596,608 +596,442 @@ prop_matchShort_NoHelp (AnyChar c) =
 
 -- * Tests for utilities
 
-prop_withHelp_MatchesMain builder =
-  runParser (withHelp $ parser ex) (inputs ex) === (Right . Right $ result ex)
+prop_withHelp_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (withHelp p) i === (Right $ Right o)
+
+prop_withHelp_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
+  runParser p' ["--help"] === (Right . Left $ getHelp p')
   where
-    ex = buildGenericExample builder
+    p' = withHelp p
 
-prop_withHelp_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
-  runParser p ["--help"] === (Right . Left $ getHelp p)
+prop_withHelp_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
+  not ("--help" `member` consumes p_) ==>
+  forAllEx p_ $ \ex ->
+  forAll (prefix $ blocks ex) $ \pref ->
+  runParser p' (concat pref ++ ["--help"] ++ ys) === (Right . Left $ getHelp p')
   where
-    ex = buildGenericExample builder
-    p = withHelp $ parser ex
+    p' = withHelp p
 
-prop_withHelp_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes' ex) ==>
-  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
-    runParser p (pref ++ ["--help"] ++ ys) === (Right . Left $ getHelp p)
-  where
-    ex = buildGenericExample builder
-    p = withHelp $ parser ex
-
-prop_withHelp_AddsHelp builder =
-  getHelp (withHelp $ parser ex) =/= getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
+prop_withHelp_AddsHelp (AnyParser _ p) =
+  getHelp (withHelp p) =/= getHelp p
 
 
-prop_withHelp'_MatchesMain builder =
-  runParser (withHelp' $ parser ex) (inputs ex) === (Right . Right $ result ex)
-  where
-    ex = buildGenericExample builder
+prop_withHelp'_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (withHelp' p) i === (Right $ Right o)
 
-prop_withHelp'_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
+prop_withHelp'_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
   runParser (withHelp' p) ["--help"] === (Right . Left $ getHelp p)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
 
-prop_withHelp'_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes' ex) ==>
-  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
-    runParser (withHelp' p) (pref ++ ["--help"] ++ ys)
+prop_withHelp'_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
+  not ("--help" `member` consumes p_) ==>
+  forAllEx p_ $ \ex ->
+  forAll (prefix $ blocks ex) $ \pref ->
+    runParser (withHelp' p) (concat pref ++ ["--help"] ++ ys)
     === (Right . Left $ getHelp p)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
 
-prop_withHelp'_AddsNoHelp builder =
-  getHelp (withHelp' $ parser ex) === getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
+prop_withHelp'_AddsNoHelp (AnyParser _ p) =
+  getHelp (withHelp' p) === getHelp p
 
 
-prop_withSubHelp_MatchesMain builder =
-  runParser (withSubHelp p) (inputs ex) === (Right . Right $ result ex)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_withSubHelp_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (withSubHelp p) i === (Right $ Right o)
 
-prop_withSubHelp_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
+prop_withSubHelp_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
   runParser (withSubHelp p) ["--help"] === (Right . Left . getHelp $ withHelp p)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
 
-prop_withSubHelp_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes' ex) ==>
-  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
-    runParser (withSubHelp p) (pref ++ ["--help"] ++ ys)
-    === (Right . Left . getHelp $ withHelp p)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_withSubHelp_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
+  not ("--help" `member` consumes p_) ==>
+  forAllEx p_ $ \ex ->
+  forAll (prefix $ blocks ex) $ \pref ->
+  runParser (withSubHelp p) (concat pref ++ ["--help"] ++ ys)
+  === (Right . Left . getHelp $ withHelp p)
 
-prop_withSubHelp_ClearsHelp builder =
-  getHelp (withSubHelp $ parser ex) === mempty
-  where
-    ex = buildGenericExample builder
+prop_withSubHelp_ClearsHelp (AnyParser _ p) =
+  getHelp (withSubHelp p) === mempty
 
 
-prop_withSubHelp'_MatchesMain builder =
-  runParser (withSubHelp' p) (inputs ex) === (Right . Right $ result ex)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_withSubHelp'_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (withSubHelp' p) i === (Right $ Right o)
 
-prop_withSubHelp'_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
+prop_withSubHelp'_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
   runParser (withSubHelp' p) ["--help"] === (Right . Left $ getHelp p)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
 
-prop_withSubHelp'_MatchesHelpMiddle builder (AnyArgs ys) =
-  not ("--help" `member` consumes' ex) ==>
-  forAll (concat <$> (prefix $ blocks ex)) $ \pref ->
-    runParser (withSubHelp' p) (pref ++ ["--help"] ++ ys)
-    === (Right . Left $ getHelp p)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_withSubHelp'_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
+  not ("--help" `member` consumes p_) ==>
+  forAllEx p_ $ \ex ->
+  forAll (prefix $ blocks ex) $ \pref ->
+  runParser (withSubHelp' p) (concat pref ++ ["--help"] ++ ys)
+  === (Right . Left $ getHelp p)
 
-prop_withSubHelp'_ClearsHelp builder =
-  getHelp (withSubHelp' $ parser ex) === mempty
-  where
-    ex = buildGenericExample builder
+prop_withSubHelp'_ClearsHelp (AnyParser _ p) =
+  getHelp (withSubHelp' p) === mempty
 
 
-prop_withVersion_MatchesMain s builder =
-  runParser (withVersion s p) (inputs ex) === (Right . Right $ result ex)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_withVersion_MatchesMain s (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (withVersion s p) i === (Right $ Right o)
 
-prop_withVersion_MatchesVersion s builder =
-  not ("--version" `member` consumes' ex) ==>
-  runParser (withVersion s $ parser ex) ["--version"] === (Right $ Left s)
-  where
-    ex = buildGenericExample builder
+prop_withVersion_MatchesVersion s (AnyParser p_ p) =
+  not ("--version" `member` consumes p_) ==>
+  runParser (withVersion s p) ["--version"] === (Right $ Left s)
 
-prop_withVersion_AddsHelp s builder =
-  getHelp (withVersion s $ parser ex) =/= getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
+prop_withVersion_AddsHelp s (AnyParser _ p) =
+  getHelp (withVersion s p) =/= getHelp p
 
 
-prop_withVersion'_MatchesMain s builder =
-  runParser (withVersion' s p) (inputs ex) === (Right . Right $ result ex)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_withVersion'_MatchesMain s (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (withVersion' s p) i === (Right $ Right o)
 
-prop_withVersion'_MatchesVersion s builder =
-  not ("--version" `member` consumes' ex) ==>
-  runParser (withVersion' s $ parser ex) ["--version"] === (Right $ Left s)
-  where
-    ex = buildGenericExample builder
+prop_withVersion'_MatchesVersion s (AnyParser p_ p) =
+  not ("--version" `member` consumes p_) ==>
+  runParser (withVersion' s p) ["--version"] === (Right $ Left s)
 
-prop_withVersion'_AddsNoHelp s builder =
-  getHelp (withVersion' s $ parser ex) === getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
+prop_withVersion'_AddsNoHelp s (AnyParser _ p) =
+  getHelp (withVersion' s p) === getHelp p
 
 
-prop_beforeDashes_MatchesMain builder =
-  runParser (beforeDashes $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_beforeDashes_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (beforeDashes p) i === Right o
 
 -- TODO: make this fail (when p consumes' "--"). Right now it doesn't fail
 -- because GenericExample is too limited, all its parsers finish without
 -- waiting for EOF.
-prop_beforeDashes_Matches builder =
-  runParser (beforeDashes p) (inputs ex ++ ["--"]) === Right (result ex)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_beforeDashes_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (beforeDashes p) (i ++ ["--"]) === Right o
 
-prop_beforeDashes_Finishes builder (AnyArgs ys) =
-  runParser (beforeDashes p *> args) (inputs ex ++ ["--"] ++ ys) === Right ys
-  where
-    ex = buildGenericExample builder
-    p = parser ex
+prop_beforeDashes_Finishes (AnyParser p_ p) (AnyArgs xs) =
+  forAllExamples p_ $ \i _ ->
+  runParser (beforeDashes p *> args) (i ++ ["--"] ++ xs) === Right xs
 
-prop_beforeDashes_AddsNoHelp builder =
-  getHelp (beforeDashes $ parser ex) === getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
+prop_beforeDashes_AddsNoHelp (AnyParser _ p) =
+  getHelp (beforeDashes p) === getHelp p
 
 
-prop_quiet_Matches builder =
-  runParser (quiet $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_quiet_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (quiet p) i === Right o
 
-prop_quiet_AddsNoHelp builder =
-  getHelp (quiet $ parser ex) === getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
+prop_quiet_AddsNoHelp (AnyParser _ p) =
+  getHelp (quiet p) === getHelp p
 
 
-prop_eject_Matches b1 b2 =
-  runParser (eject (parser ex1) (parser ex2)) (inputs ex1)
-  === (Right . Right $ result ex1)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_eject_Matches (AnyParser p1_ p1) (AnyParser _ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  runParser (eject p1 p2) i1 === (Right $ Right o1)
 
--- TODO: Also check that 'eject' can eject in the middle of a parse.
+prop_eject_Ejects (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs xs) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser (eject p1 p2) (i2 ++ xs) === (Right $ Left o2)
 
-prop_eject_Ejects b1 b2 (AnyArgs ys) =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser (eject (parser ex1) (parser ex2)) (inputs ex2 ++ ys)
-  === (Right . Left $ result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_eject_EjectsAfter (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs xs) =
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser (eject p1 p2) (i1 ++ i2 ++ xs) === (Right $ Left o2)
 
-prop_eject_EjectsAfter b1 b2 (AnyArgs ys) =
-  runParser (eject (parser ex1) (parser ex2)) (inputs ex1 ++ inputs ex2 ++ ys)
-  === (Right . Left $ result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_eject_EjectsMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs xs) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllEx p1_ $ \ex1 ->
+  forAllEx p2_ $ \ex2 ->
+  forAll (prefix $ blocks ex1) $ \pref ->
+  runParser (eject p1 p2) (concat pref ++ input ex2 ++ xs)
+  === (Right . Left $ output ex2)
 
-prop_eject_EjectsMiddle b1 b2 (AnyArgs ys) =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  forAll (concat <$> prefix (blocks ex1)) $ \pref ->
-    runParser (eject (parser ex1) (parser ex2)) (pref ++ inputs ex2 ++ ys)
-    === (Right . Left $ result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_eject_EjectsLongAfter
+  (AnyParser p1_ p1) (AnyArgs xs) (AnyParser p2_ p2) (AnyArgs ys) =
+  not (any (`member` consumes p2_) xs) ==>
+  forAllExamples p1_ $ \i1 _ ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> eject p1 p2 <#> args) (i1 ++ xs ++ i2 ++ ys)
+  === (Right (Left o2, xs))
 
-prop_eject_EjectsLongAfter b1 (AnyArgs ys) b2 (AnyArgs zs) =
-  not (any (`member` c2) ys) ==>
-  runParser ((,) <$> eject p1 p2 <#> args) (i1 ++ ys ++ i2 ++ zs)
-  === (Right (Left r2, ys))
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
-    r2 = result ex2
-    c2 = consumes' ex2
-
-prop_eject_JoinsHelp b1 b2 =
+prop_eject_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp (eject p1 p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
 
 -- * Tests for manipulating help in 'Parser' objects.
 
-prop_header_Matches s builder =
-  runParser (header s $ parser ex) (inputs ex) === Right (result ex)
+prop_header_Matches s (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (header s p) i === Right o
+
+prop_header_PrependsHeader s (AnyParser _ p) =
+  getHelp (header s p) === makeHeader s <> getHelp p
+
+
+prop_footer_Matches s (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (footer s p) i === Right o
+
+prop_footer_PrependsFooter s (AnyParser _ p) =
+  getHelp (footer s p) === makeFooter s <> getHelp p
+
+prop_flagHelp_Matches fs desc (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (flagHelp (allForms fs) desc p) i === Right o
+
+prop_flagHelp_PrependsHelp fs desc (AnyParser p_ p) =
+  getHelp (flagHelp forms desc p) === makeFlagHelp forms desc <> getHelp p
   where
-    ex = buildGenericExample builder
-
-prop_header_PrependsHeader s builder =
-  getHelp (header s $ parser ex) === makeHeader s <> getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
-
-
-prop_footer_Matches s builder =
-  runParser (footer s $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
-
-prop_footer_PrependsFooter s builder =
-  getHelp (footer s $ parser ex) === makeFooter s <> getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
-
-
-prop_flagHelp_Matches fs desc builder =
-  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
-    modify = flagHelp (allForms fs) desc
-
-prop_flagHelp_PrependsHelp fs desc builder =
-  getHelp (flagHelp forms desc $ parser ex)
-  === makeFlagHelp forms desc <> getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
     forms = allForms fs
 
-prop_flagHelp_IllegalForm (ChosenIllegal fs) desc builder =
-  throwsError . formatHelp . getHelp . flagHelp (allForms fs) desc $ parser ex
-  where
-    ex = buildGenericExample builder
+prop_flagHelp_IllegalForm (ChosenIllegal fs) desc (AnyParser p_ p) =
+  throwsError . formatHelp . getHelp $ flagHelp (allForms fs) desc p
 
 
-prop_paramHelp_Matches fs metavar desc builder =
-  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
-    modify = paramHelp (allForms fs) metavar desc
+prop_paramHelp_Matches fs metavar desc (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (paramHelp (allForms fs) metavar desc p) i === Right o
 
-prop_paramHelp_PrependsHelp fs metavar desc builder =
-  getHelp (paramHelp forms metavar desc $ parser ex)
-  === makeParamHelp forms metavar desc <> getHelp (parser ex)
+prop_paramHelp_PrependsHelp fs metavar desc (AnyParser _ p) =
+  getHelp (paramHelp forms metavar desc p)
+  === makeParamHelp forms metavar desc <> getHelp p
   where
-    ex = buildGenericExample builder
     forms = allForms fs
 
-prop_paramHelp_IllegalForm (ChosenIllegal fs) metavar desc builder =
-  throwsError . formatHelp . getHelp
-  . paramHelp (allForms fs) metavar desc $ parser ex
+prop_paramHelp_IllegalForm (ChosenIllegal fs) metavar desc (AnyParser _ p) =
+  throwsError . formatHelp . getHelp $ paramHelp (allForms fs) metavar desc p
+
+
+prop_freeArgHelp_Matches metavar desc (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (freeArgHelp metavar desc p) i === Right o
+
+prop_freeArgHelp_PrependsHelp metavar desc (AnyParser _ p) =
+  getHelp (freeArgHelp metavar desc p)
+  === makeFreeArgHelp metavar desc <> getHelp p
+
+
+prop_multiParamHelp_Matches fs fh desc (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (multiParamHelp (allForms fs) fh desc p) i === Right o
+
+prop_multiParamHelp_PrependsHelp fs fh desc (AnyParser _ p) =
+  getHelp (multiParamHelp forms fh desc p)
+  === makeMultiParamHelp forms fh desc <> getHelp p
   where
-    ex = buildGenericExample builder
-
-
-prop_freeArgHelp_Matches metavar desc builder =
-  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
-    modify = freeArgHelp metavar desc
-
-prop_freeArgHelp_PrependsHelp metavar desc builder =
-  getHelp (freeArgHelp metavar desc $ parser ex)
-  === makeFreeArgHelp metavar desc <> getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
-
-
-prop_multiParamHelp_Matches fs fh desc builder =
-  runParser (modify $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
-    modify = multiParamHelp (allForms fs) fh desc
-
-prop_multiParamHelp_PrependsHelp fs fh desc builder =
-  getHelp (multiParamHelp forms fh desc $ parser ex)
-  === makeMultiParamHelp forms fh desc <> getHelp (parser ex)
-  where
-    ex = buildGenericExample builder
     forms = allForms fs
 
-prop_multiParamHelp_IllegalForm (ChosenIllegal fs) fh desc builder =
-  throwsError . formatHelp . getHelp
-  . multiParamHelp (allForms fs) fh desc $ parser ex
-  where
-    ex = buildGenericExample builder
+prop_multiParamHelp_IllegalForm (ChosenIllegal fs) fh desc (AnyParser _ p) =
+  throwsError . formatHelp . getHelp $ multiParamHelp (allForms fs) fh desc p
 
 
-prop_clearHelp_Matches builder =
-  runParser (clearHelp $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_clearHelp_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (clearHelp p) i === Right o
 
-prop_clearHelp_ClearsHelp builder =
-  getHelp (clearHelp $ parser ex) === mempty
-  where
-    ex = buildGenericExample builder
+prop_clearHelp_ClearsHelp (AnyParser _ p) =
+  getHelp (clearHelp p) === mempty
 
 
-prop_clearHeader_Matches builder =
-  runParser (clearHeader $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_clearHeader_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (clearHeader p) i === Right o
 
-prop_clearHeader_ClearsHeader builder =
-  getHelp (clearHeader $ parser ex) === clearHelpHeader (getHelp $ parser ex)
-  where
-    ex = buildGenericExample builder
+prop_clearHeader_ClearsHeader (AnyParser _ p) =
+  getHelp (clearHeader p) === clearHelpHeader (getHelp p)
 
 
-prop_clearFooter_Matches builder =
-  runParser (clearFooter $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_clearFooter_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (clearFooter p) i === Right o
 
-prop_clearFooter_ClearsFooter builder =
-  getHelp (clearFooter $ parser ex) === clearHelpFooter (getHelp $ parser ex)
-  where
-    ex = buildGenericExample builder
+prop_clearFooter_ClearsFooter (AnyParser _ p) =
+  getHelp (clearFooter p) === clearHelpFooter (getHelp p)
 
 
-prop_clearTable_Matches builder =
-  runParser (clearTable $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_clearTable_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (clearTable p) i === Right o
 
-prop_clearTable_ClearsTable builder =
-  getHelp (clearTable $ parser ex) === clearHelpTable (getHelp $ parser ex)
-  where
-    ex = buildGenericExample builder
+prop_clearTable_ClearsTable (AnyParser _ p) =
+  getHelp (clearTable p) === clearHelpTable (getHelp p)
 
 
-prop_sortTable_Matches builder =
-  runParser (sortTable $ parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_sortTable_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (sortTable p) i === Right o
 
-prop_sortTable_SortsTable builder =
-  getHelp (sortTable $ parser ex) === sortHelpTable (getHelp $ parser ex)
-  where
-    ex = buildGenericExample builder
+prop_sortTable_SortsTable (AnyParser _ p) =
+  getHelp (sortTable p) === sortHelpTable (getHelp p)
 
 
 
 -- * Tests for IO functions
 
-prop_runParserIO_Returns builder =
-  runParserIO (parser ex) (inputs ex) `sameIO` return (result ex)
-  where
-    ex = buildGenericExample builder
+prop_runParserIO_Returns (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParserIO p i `sameIO` return o
 
-prop_runParserIO_Dies builder (AnyArgs as) env =
-  isLeft (runParser (parser ex) as) ==>
-  diesWithoutStdout $ runTestIO' (runParserIO (parser ex) as) env
-  where
-    ex = buildGenericExample builder
+prop_runParserIO_Dies (AnyParser _ p) (AnyArgs as) env =
+  isLeft (runParser p as) ==>
+  diesWithoutStdout $ runTestIO' (runParserIO p as) env
 
 
-prop_parseArgs_Returns builder s =
-  runTestIO' (parseArgs (parser ex)) (TestEnv s (inputs ex))
-  === (TestReturn (result ex), "")
-  where
-    ex = buildGenericExample builder
+prop_parseArgs_Returns (AnyParser p_ p) s =
+  forAllExamples p_ $ \i o ->
+  runTestIO' (parseArgs p) (TestEnv s i) === (TestReturn o, "")
 
-prop_parseArgs_Dies builder env@(TestEnv _ as) =
-  isLeft (runParser (parser ex) as) ==>
-  diesWithoutStdout $ runTestIO' (parseArgs $ parser ex) env
-  where
-    ex = buildGenericExample builder
+prop_parseArgs_Dies (AnyParser _ p) env@(TestEnv _ as) =
+  isLeft (runParser p as) ==>
+  diesWithoutStdout $ runTestIO' (parseArgs p) env
 
 
-prop_parseArgsWithHelp_Returns builder s =
-  runTestIO' (parseArgsWithHelp (parser ex)) (TestEnv s (inputs ex))
-  === (TestReturn (result ex), "")
-  where
-    ex = buildGenericExample builder
+prop_parseArgsWithHelp_Returns (AnyParser p_ p) s =
+  forAllExamples p_ $ \i o ->
+  runTestIO' (parseArgsWithHelp p) (TestEnv s i) === (TestReturn o, "")
 
-prop_parseArgsWithHelp_PrintsHelp builder s =
-  not ("--help" `member` consumes' ex) ==>
+prop_parseArgsWithHelp_PrintsHelp (AnyParser p_ p) s =
+  not ("--help" `member` consumes p_) ==>
   runTestIO' (parseArgsWithHelp p) (TestEnv s ["--help"])
   === (TestExitSuccess, (formatHelp . getHelp $ withHelp p) ++ "\n")
-  where
-    ex = buildGenericExample builder
-    p = parser ex
 
-prop_parseArgsWithHelp_Dies builder env@(TestEnv _ as) =
-  isLeft (runParser (withHelp $ parser ex) as) ==>
-  diesWithoutStdout $ runTestIO' (parseArgsWithHelp $ parser ex) env
-  where
-    ex = buildGenericExample builder
+prop_parseArgsWithHelp_Dies (AnyParser _ p) env@(TestEnv _ as) =
+  isLeft (runParser (withHelp p) as) ==>
+  diesWithoutStdout $ runTestIO' (parseArgsWithHelp p) env
 
 
-prop_withHelpIO_MatchesMain builder =
-  join (runParserIO (withHelpIO $ parser ex) (inputs ex)) `sameIO` result ex
-  where
-    ex = buildGenericIOExample builder
+prop_withHelpIO_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  join (runParserIO (withHelpIO $ return <$> p) i) `sameIO` return o
 
-prop_withHelpIO_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
-  join (runParserIO (withHelpIO p) ["--help"]) `sameIO` do
+prop_withHelpIO_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
+  join (runParserIO (withHelpIO $ return <$> p) ["--help"]) `sameIO` do
     putStrLn . formatHelp . getHelp $ withHelp p
     exitSuccess
+
+prop_withHelpIO_AddsHelp (AnyParser _ p) =
+  getHelp (withHelpIO p') === getHelp (withHelp p')
   where
-    ex = buildGenericIOExample builder
-    p = parser ex
-
-prop_withHelpIO_AddsHelp builder =
-  getHelp (withHelpIO $ parser ex) === getHelp (withHelp $ parser ex)
-  where
-    ex = buildGenericIOExample builder
+    p' = return <$> p :: Parser (TestIO String)
 
 
-prop_withHelpIO'_MatchesMain builder =
-  join (runParserIO (withHelpIO' $ parser ex) (inputs ex)) `sameIO` result ex
-  where
-    ex = buildGenericIOExample builder
+prop_withHelpIO'_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  join (runParserIO (withHelpIO' $ return <$> p) i) `sameIO` return o
 
-prop_withHelpIO'_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
-  join (runParserIO (withHelpIO' p) ["--help"]) `sameIO` do
+prop_withHelpIO'_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
+  join (runParserIO (withHelpIO' $ return <$> p) ["--help"]) `sameIO` do
     putStrLn . formatHelp $ getHelp p
     exitSuccess
+
+prop_withHelpIO'_AddsNoHelp (AnyParser _ p) =
+  getHelp (withHelpIO' p') === getHelp p'
   where
-    ex = buildGenericIOExample builder
-    p = parser ex
-
-prop_withHelpIO'_AddsNoHelp builder =
-  getHelp (withHelpIO' $ parser ex) === getHelp (parser ex)
-  where
-    ex = buildGenericIOExample builder
+    p' = return <$> p :: Parser (TestIO String)
 
 
-prop_withSubHelpIO_MatchesMain builder =
-  join (runParserIO (withSubHelpIO $ parser ex) (inputs ex)) `sameIO` result ex
-  where
-    ex = buildGenericIOExample builder
+prop_withSubHelpIO_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  join (runParserIO (withSubHelpIO $ return <$> p) i) `sameIO` return o
 
-prop_withSubHelpIO_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
-  join (runParserIO (withSubHelpIO p) ["--help"]) `sameIO` do
+prop_withSubHelpIO_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
+  join (runParserIO (withSubHelpIO $ return <$> p) ["--help"]) `sameIO` do
     putStrLn . formatHelp . getHelp $ withHelp p
     exitSuccess
+
+prop_withSubHelpIO_ClearsHelp (AnyParser _ p) =
+  getHelp (withSubHelpIO p') === mempty
   where
-    ex = buildGenericIOExample builder
-    p = parser ex
+    p' = return <$> p :: Parser (TestIO String)
 
-prop_withSubHelpIO_ClearsHelp builder =
-  getHelp (withSubHelpIO $ parser ex) === mempty
-  where
-    ex = buildGenericIOExample builder
+prop_withSubHelpIO'_MatchesMain (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  join (runParserIO (withSubHelpIO' $ return <$> p) i) `sameIO` return o
 
-
-prop_withSubHelpIO'_MatchesMain builder =
-  join (runParserIO (withSubHelpIO' $ parser ex) (inputs ex)) `sameIO` result ex
-  where
-    ex = buildGenericIOExample builder
-
-prop_withSubHelpIO'_MatchesHelp builder =
-  not ("--help" `member` consumes' ex) ==>
-  join (runParserIO (withSubHelpIO' p) ["--help"]) `sameIO` do
+prop_withSubHelpIO'_MatchesHelp (AnyParser p_ p) =
+  not ("--help" `member` consumes p_) ==>
+  join (runParserIO (withSubHelpIO' $ return <$> p) ["--help"]) `sameIO` do
     putStrLn . formatHelp $ getHelp p
     exitSuccess
+
+prop_withSubHelpIO'_ClearsHelp (AnyParser _ p) =
+  getHelp (withSubHelpIO' p') === mempty
   where
-    ex = buildGenericIOExample builder
-    p = parser ex
-
-prop_withSubHelpIO'_ClearsHelp builder =
-  getHelp (withSubHelpIO' $ parser ex) === mempty
-  where
-    ex = buildGenericIOExample builder
+    p' = return <$> p :: Parser (TestIO String)
 
 
-prop_withVersionIO_MatchesMain s builder =
-  join (runParserIO (withVersionIO s p) (inputs ex)) `sameIO` result ex
-  where
-    ex = buildGenericIOExample builder
-    p = parser ex
+prop_withVersionIO_MatchesMain s (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  join (runParserIO (withVersionIO s $ return <$> p) i) `sameIO` return o
 
-prop_withVersionIO_MatchesVersion s builder =
-  not ("--version" `member` consumes' ex) ==>
-  join (runParserIO (withVersionIO s $ parser ex) ["--version"]) `sameIO` do
+prop_withVersionIO_MatchesVersion s (AnyParser p_ p) =
+  not ("--version" `member` consumes p_) ==>
+  join (runParserIO (withVersionIO s $ return <$> p) ["--version"]) `sameIO` do
     putStrLn s
     exitSuccess
+
+prop_withVersionIO_AddsHelp s (AnyParser _ p) =
+  getHelp (withVersionIO s p') === getHelp (withVersion s p')
   where
-    ex = buildGenericIOExample builder
-
-prop_withVersionIO_AddsHelp s builder =
-  getHelp (withVersionIO s $ parser ex) === getHelp (withVersion s $ parser ex)
-  where
-    ex = buildGenericIOExample builder
+    p' = return <$> p :: Parser (TestIO String)
 
 
-prop_withVersionIO'_MatchesMain s builder =
-  join (runParserIO (withVersionIO' s p) (inputs ex)) `sameIO` result ex
-  where
-    ex = buildGenericIOExample builder
-    p = parser ex
+prop_withVersionIO'_MatchesMain s (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  join (runParserIO (withVersionIO' s $ return <$> p) i) `sameIO` return o
 
-prop_withVersionIO'_MatchesVersion s builder =
-  not ("--version" `member` consumes' ex) ==>
-  join (runParserIO (withVersionIO' s $ parser ex) ["--version"]) `sameIO` do
+prop_withVersionIO'_MatchesVersion s (AnyParser p_ p) =
+  not ("--version" `member` consumes p_) ==>
+  join (runParserIO (withVersionIO' s $ return <$> p) ["--version"]) `sameIO` do
     putStrLn s
     exitSuccess
-  where
-    ex = buildGenericIOExample builder
 
-prop_withVersionIO'_AddsNoHelp s builder =
-  getHelp (withVersionIO' s $ parser ex) === getHelp (parser ex)
+prop_withVersionIO'_AddsNoHelp s (AnyParser _ p) =
+  getHelp (withVersionIO' s p') === getHelp p'
   where
-    ex = buildGenericIOExample builder
+    p' = return <$> p :: Parser (TestIO String)
 
 
 -- * Tests for Functor
 
-prop_fmap_MapsSuccess builder (Fun _ (f :: String -> String)) =
-  runParser (fmap f p) as === fmap f (runParser p as)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
-    as = inputs ex
+prop_fmap_MapsSuccess (AnyParser p_ p) (Fun _ (f :: String -> String)) =
+  forAllExamples p_ $ \i _ ->
+  runParser (fmap f p) i === fmap f (runParser p i)
 
-prop_fmap_MapsAnyResult builder (AnyArgs as) (Fun _ (f :: String -> String)) =
-  runParser (fmap f p) as === fmap f (runParser p as)
-  where
-    p = parser $ buildGenericExample builder
+prop_fmap_MapsAnyResult
+  (AnyParser p_ p) (AnyArgs as) (Fun _ (f :: String -> String)) =
+  forAllExamples p_ $ \i _ ->
+  runParser (fmap f p) i === fmap f (runParser p i)
 
-prop_fmap_AddsNoHelp builder (Fun _ (f :: String -> String)) =
+prop_fmap_AddsNoHelp (AnyParser _ p) (Fun _ (f :: String -> String)) =
   getHelp (fmap f p) === getHelp p
-  where
-    p = parser $ buildGenericExample builder
 
 
 -- * Tests for FunctorFail
 
-prop_fmapOrFail_MapsSuccess builder (Fun _ (f :: String -> String)) =
-  runParser (fmapOrFail (Right . f) p) as === fmap f (runParser p as)
-  where
-    ex = buildGenericExample builder
-    p = parser ex
-    as = inputs ex
+prop_fmapOrFail_MapsSuccess (AnyParser p_ p) (Fun _ (f :: String -> String)) =
+  forAllExamples p_ $ \i o ->
+  runParser (fmapOrFail (Right . f) p) i === fmap f (runParser p i)
 
-prop_fmapOrFail_MapsSuccessToFailure builder s =
-  isLeft' $ runParser (fmapOrFail func (parser ex)) (inputs ex)
+prop_fmapOrFail_MapsSuccessToFailure (AnyParser p_ p) s =
+  forAllExamples p_ $ \i o ->
+  isLeft' $ runParser (fmapOrFail func p) i
   where
-    ex = buildGenericExample builder
     func _ = (Left s) :: Either String String
 
-prop_fmapOrFail_MapsAnyToFailure builder s (AnyArgs as)=
-  isLeft' $ runParser (fmapOrFail func (parser ex)) as
+prop_fmapOrFail_MapsAnyToFailure (AnyParser _ p) s (AnyArgs as)=
+  isLeft' $ runParser (fmapOrFail func p) as
   where
-    ex = buildGenericExample builder
     func _ = (Left s) :: Either String String
 
-prop_fmapOrFail_AddsNoHelp builder (Fun _ f) =
+prop_fmapOrFail_AddsNoHelp (AnyParser _ p) (Fun _ f) =
   getHelp (fmapOrFail f p :: Parser String) === getHelp p
-  where
-    p = parser $ buildGenericExample builder
 
 
 
@@ -1219,32 +1053,19 @@ prop_pure_NoHelp (x :: String) =
 
 -- TODO: make this test fail by generating better GenericExample. Then fix by
 -- requiring that the first parser finishes without waiting for EOF.
-prop_ap_Matches b1 b2 =
-  runParser ((,) <$> parser ex1 <*> parser ex2) (inputs ex1 ++ inputs ex2)
-  === Right (result ex1, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_ap_Matches (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> p1 <*> p2) (i1 ++ i2) === Right (o1, o2)
 
-prop_ap_MatchesFar b1 b2 (AnyArgs as) =
-  not (any (`member` c2) as) ==>
-  runParser (((,) <$> p1 <*> p2) <# args) (i1 ++ as ++ i2) === Right (r1, r2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
-    r1 = result ex1
-    r2 = result ex2
-    c2 = consumes' ex2
+prop_ap_MatchesFar (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs as) =
+  not (any (`member` consumes p2_) as) ==>
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser (((,) <$> p1 <*> p2) <# args) (i1 ++ as ++ i2) === Right (o1, o2)
 
-prop_ap_JoinsHelp b1 b2 =
+prop_ap_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp ((,) <$> p1 <*> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
 
@@ -1272,115 +1093,84 @@ prop_empty_NoHelp =
   getHelp (empty :: Parser String) === mempty
 
 
-prop_alternative_MatchesFirst b1 b2 =
-  runParser (parser ex1 <|> parser ex2) (inputs ex1) === Right (result ex1)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_alternative_MatchesFirst (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  runParser (p1 <|> p2) i1 === Right o1
 
 -- TODO: make this fail by improving GenericExample. Then add missing
 -- requirement: parser ex1 shouldn't finish immediately, and also one of the
 -- parsers shouldn't accept EOF.
-prop_alternative_MatchesSecond b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser (parser ex1 <|> parser ex2) (inputs ex2) === Right (result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_alternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p2_ $ \i2 o2 ->
+  consumes p1_ `disjoint` consumes p2_ ==>
+  runParser (p1 <|> p2) i2 === Right o2
 
-prop_alternative_LeftEmpty builder =
-  runParser (empty <|> parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_alternative_LeftEmpty (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (empty <|> p) i === Right o
 
-prop_alternative_RightEmpty builder =
-  runParser (parser ex <|> empty) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_alternative_RightEmpty (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (p <|> empty) i === Right o
 
-prop_alternative_JoinsHelp b1 b2 =
+prop_alternative_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp (p1 <|> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
-prop_leftAlternative_MatchesFirst b1 b2 =
-  runParser (parser ex1 <-|> parser ex2) (inputs ex1) === Right (result ex1)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_leftAlternative_MatchesFirst (AnyParser p1_ p1) (AnyParser _ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  runParser (p1 <-|> p2) i1 === Right o1
 
-prop_leftAlternative_MatchesSecond b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser (parser ex1 <-|> parser ex2) (inputs ex2) === Right (result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_leftAlternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p2_ $ \i2 o2 ->
+  consumes p1_ `disjoint` consumes p2_ ==>
+  runParser (p1 <-|> p2) i2 === Right o2
 
-prop_leftAlternative_MatchesMiddle b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 && (not . null $ blocks ex1) ==>
-  forAll (concat <$> properPrefix (blocks ex1)) $ \pref ->
-    runParser (parser ex1 <-|> parser ex2) (pref ++ inputs ex2)
-    === Right (result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_leftAlternative_MatchesMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllEx p1_ $ \ex1 -> (not . null $ blocks ex1) ==>
+  forAllEx p2_ $ \ex2 ->
+  forAll (properPrefix $ blocks ex1) $ \pref ->
+  runParser (p1 <-|> p2) (concat pref ++ input ex2) === Right (output ex2)
 
-prop_leftAlternative_LeftEmpty builder =
-  runParser (empty <-|> parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_leftAlternative_LeftEmpty (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (empty <-|> p) i === Right o
 
-prop_leftAlternative_RightEmpty builder =
-  runParser (parser ex <-|> empty) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_leftAlternative_RightEmpty (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (p <-|> empty) i === Right o
 
-prop_leftAlternative_JoinsHelp b1 b2 =
+prop_leftAlternative_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp (p1 <-|> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
-prop_rightAlternative_MatchesFirst b1 b2 =
-  runParser (parser ex1 <|-> parser ex2) (inputs ex1) === Right (result ex1)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_rightAlternative_MatchesFirst (AnyParser p1_ p1) (AnyParser _ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  runParser (p1 <|-> p2) i1 === Right o1
 
-prop_rightAlternative_MatchesSecond b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser (parser ex1 <|-> parser ex2) (inputs ex2) === Right (result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_rightAlternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser (p1 <|-> p2) i2 === Right o2
 
-prop_rightAlternative_MatchesMiddle b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 && (not . null $ blocks ex2) ==>
-  forAll (concat <$> properPrefix (blocks ex2)) $ \pref ->
-    runParser (parser ex1 <|-> parser ex2) (pref ++ inputs ex1)
-    === Right (result ex1)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_rightAlternative_MatchesMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllEx p1_ $ \ex1 ->
+  forAllEx p2_ $ \ex2 -> (not . null $ blocks ex2) ==>
+  forAll (properPrefix $ blocks ex2) $ \pref ->
+  runParser (p1 <|-> p2) (concat pref ++ input ex1) === Right (output ex1)
 
-prop_rightAlternative_LeftEmpty builder =
-  runParser (empty <|-> parser ex) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_rightAlternative_LeftEmpty (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (empty <|-> p) i === Right o
 
-prop_rightAlternative_RightEmpty builder =
-  runParser (parser ex <|-> empty) (inputs ex) === Right (result ex)
-  where
-    ex = buildGenericExample builder
+prop_rightAlternative_RightEmpty (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (p <|-> empty) i === Right o
 
-prop_rightAlternative_JoinsHelp b1 b2 =
+prop_rightAlternative_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp (p1 <|-> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
 -- * Tests for SelectiveParser
@@ -1401,213 +1191,143 @@ prop_eof_NoHelp =
 -- TODO: make this fail by improving GenericExample. Then fix by requiring that
 -- the consumed languages be disjoint. Right now this should fail if e.g.  ex1
 -- is 'many x' and ex2 is 'x'.
-prop_parallel_DirectOrder b1 b2 =
-  runParser ((,) <$> parser ex1 <#> parser ex2) (inputs ex1 ++ inputs ex2)
-  === Right (result ex1, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_parallel_DirectOrder (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> p1 <#> p2) (i1 ++ i2) === Right (o1, o2)
 
-prop_parallel_ReverseOrder b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser ((,) <$> parser ex1 <#> parser ex2) (inputs ex2 ++ inputs ex1)
-  === Right (result ex1, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_parallel_ReverseOrder (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> p1 <#> p2) (i2 ++ i1) === Right (o1, o2)
 
-prop_parallel_DirectOrderFar b1 b2 (AnyArgs as) =
-  not (any (`member` c2) as) ==>
+prop_parallel_DirectOrderFar
+  (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs as) =
+  not (any (`member` consumes p2_) as) ==>
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
   runParser (((,,) <$> p1 <#> p2) <#> args) (i1 ++ as ++ i2)
-  === Right (r1, r2, as)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
-    r1 = result ex1
-    r2 = result ex2
-    c2 = consumes' ex2
+  === Right (o1, o2, as)
 
-prop_parallel_ReverseOrderFar b1 b2 (AnyArgs as) =
+prop_parallel_ReverseOrderFar
+  (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs as) =
   c1 `disjoint` c2 && not (any (`member` c1) as) ==>
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
   runParser (((,,) <$> p1 <#> p2) <#> args) (i2 ++ as ++ i1)
-  === Right (r1, r2, as)
+  === Right (o1, o2, as)
   where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
-    r1 = result ex1
-    r2 = result ex2
-    c1 = consumes' ex1
-    c2 = consumes' ex2
+    c1 = consumes p1_
+    c2 = consumes p2_
 
-prop_parallel_Mix b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  forAll (concat <$> mix (blocks ex1) (blocks ex2)) $ \inputs ->
-    runParser ((,) <$> parser ex1 <#> parser ex2) inputs
-    === Right (result ex1, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_parallel_Mix (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllEx p1_ $ \ex1 ->
+  forAllEx p2_ $ \ex2 ->
+  forAll (mix (blocks ex1) (blocks ex2)) $ \bs ->
+  runParser ((,) <$> p1 <#> p2) (concat bs) === Right (output ex1, output ex2)
 
-prop_parallel_JoinsHelp b1 b2 =
+prop_parallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp ((,) <$> p1 <#> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
-prop_leftParallel_Matches b1 b2 =
-  runParser ((,) <$> parser ex1 <-#> parser ex2) (inputs ex1 ++ inputs ex2)
-  === Right (result ex1, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_leftParallel_Matches (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> p1 <-#> p2) (i1 ++ i2) === Right (o1, o2)
 
-prop_leftParallel_NotMatchesReverse b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
+prop_leftParallel_NotMatchesReverse (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
   isLeft $ runParser ((,) <$> p1 <-#> p2) (i2 ++ i1)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
 
 -- TODO: Make this fail by improving GenericExample (if parser ex1 accepts
 -- EOF).
-prop_leftParallel_MatchesInterrupting b1 b2 x =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser ((,) <$> (parser ex1 <|> orElse x) <-#> parser ex2) (inputs ex2)
-  === Right (x, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_leftParallel_MatchesInterrupting (AnyParser p1_ p1) (AnyParser p2_ p2) x =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> (p1 <|> orElse x) <-#> p2) i2 === Right (x, o2)
 
-prop_leftParallel_FinishesInterrupting b1 b2 x (AnyArg y) =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
+prop_leftParallel_FinishesInterrupting
+  (AnyParser p1_ p1) (AnyParser p2_ p2) x (AnyArg y) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p2_ $ \i2 _ ->
   runParser (((,) <$> (p1 <|> orElse x) <-#> p2) *> args) (i2 ++ [y])
   === Right [y]
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i2 = inputs ex2
 
-prop_leftParallel_JoinsHelp b1 b2 =
+prop_leftParallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp ((,) <$> p1 <-#> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
-prop_rightParallel_Matches b1 b2 =
-  consumes' ex1 `disjoint` consumes' ex2 ==>
-  runParser ((,) <$> parser ex1 <#-> parser ex2) (inputs ex2 ++ inputs ex1)
-  === Right (result ex1, result ex2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_rightParallel_Matches (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  consumes p1_ `disjoint` consumes p2_ ==>
+  forAllExamples p1_ $ \i1 o1 ->
+  forAllExamples p2_ $ \i2 o2 ->
+  runParser ((,) <$> p1 <#-> p2) (i2 ++ i1) === Right (o1, o2)
 
 -- TODO: make this fail by improving GenericExample (if ex2 accepts EOF).
-prop_rightParallel_NotMatchesDirect b1 b2 =
+prop_rightParallel_NotMatchesDirect (AnyParser p1_ p1) (AnyParser p2_ p2) =
+  forAllExamples p1_ $ \i1 _ ->
+  forAllExamples p2_ $ \i2 _ ->
   isLeft $ runParser ((,) <$> p1 <#-> p2) (i1 ++ i2)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
-    i2 = inputs ex2
 
-prop_rightParallel_MatchesInterrupting b1 b2 x =
-  runParser ((,) <$> parser ex1 <#-> (parser ex2 <|> orElse x)) (inputs ex1)
-  === Right (result ex1, x)
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
+prop_rightParallel_MatchesInterrupting (AnyParser p1_ p1) (AnyParser _ p2) x =
+  forAllExamples p1_ $ \i1 o1 ->
+  runParser ((,) <$> p1 <#-> (p2 <|> orElse x)) i1 === Right (o1, x)
 
-prop_rightParallel_FinishesInterrupting b1 b2 x (AnyArg y) =
+prop_rightParallel_FinishesInterrupting
+  (AnyParser p1_ p1) (AnyParser _ p2) x (AnyArg y) =
+  forAllExamples p1_ $ \i1 _ ->
   runParser (((,) <$> p1 <#-> (p2 <|> orElse x)) *> args) (i1 ++ [y])
   === Right [y]
-  where
-    ex1 = buildGenericExample b1
-    ex2 = buildGenericExample b2
-    p1 = parser ex1
-    p2 = parser ex2
-    i1 = inputs ex1
 
-prop_rightParallel_JoinsHelp b1 b2 =
+prop_rightParallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp ((,) <$> p1 <#-> p2) === getHelp p1 <> getHelp p2
-  where
-    p1 = parser $ buildGenericExample b1
-    p2 = parser $ buildGenericExample b2
 
 
 -- TODO: make this fail by improving GenericExample. Should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_many_MatchesOne builder =
-  runParser (many $ parser ex) (inputs ex) === Right [result ex]
-  where
-    ex = buildGenericExample builder
+prop_many_MatchesOne (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (many p) i === Right [o]
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_many_MatchesZero builder =
-  runParser (many $ parser ex) [] === Right []
-  where
-    ex = buildGenericExample builder
+prop_many_MatchesZero (AnyParser _ p) =
+  runParser (many p) [] === Right []
 
-prop_many_AddsNoHelp builder =
+prop_many_AddsNoHelp (AnyParser _ p) =
   getHelp (many p) === getHelp p
-  where
-    p = parser $ buildGenericExample builder
 
 
 -- TODO: make this fail by improving GenericExample. Should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_some_MatchesOne builder =
-  runParser (some $ parser ex) (inputs ex) === Right [result ex]
-  where
-    ex = buildGenericExample builder
+prop_some_MatchesOne (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (some p) i === Right [o]
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_some_NotMatchesZero builder =
-  isLeft' $ runParser (some $ parser ex) []
-  where
-    ex = buildGenericExample builder
+prop_some_NotMatchesZero (AnyParser _ p) =
+  isLeft' $ runParser (some p) []
 
-prop_some_AddsNoHelp builder =
+prop_some_AddsNoHelp (AnyParser _ p) =
   getHelp (some p) === getHelp p
-  where
-    p = parser $ buildGenericExample builder
 
 
-prop_optional_Matches builder =
-  runParser (optional $ parser ex) (inputs ex) === (Right . Just $ result ex)
-  where
-    ex = buildGenericExample builder
+prop_optional_Matches (AnyParser p_ p) =
+  forAllExamples p_ $ \i o ->
+  runParser (optional p) i === (Right $ Just o)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_optional_MatchesEmpty builder =
-  runParser (optional $ parser ex) [] === Right Nothing
-  where
-    ex = buildGenericExample builder
+prop_optional_MatchesEmpty (AnyParser _ p) =
+  runParser (optional p) [] === Right Nothing
 
-prop_optional_AddsNoHelp builder =
+prop_optional_AddsNoHelp (AnyParser _ p) =
   getHelp (optional p) === getHelp p
-  where
-    p = parser $ buildGenericExample builder
 
 
 prop_between_Matches
@@ -1640,31 +1360,23 @@ prop_between_SmallHigh (AnyArg s) low high =
   high < low ==>
   throwsError . toRaw $ between low high (match s)
 
-prop_between_AddsNoHelp builder (NonNegative low) (NonNegative a) =
+prop_between_AddsNoHelp (AnyParser _ p) (NonNegative low) (NonNegative a) =
   getHelp (between low (low + a) p) === getHelp p
-  where
-    p = parser $ buildGenericExample builder
 
 
-prop_perm_Matches bs =
-  mutuallyDisjoint cs ==>
-  forAll (shuffle $ zip is rs) $ \pairs ->
-    runParser (perm ps) (concat $ map fst pairs) === Right (map snd pairs)
-  where
-    es = map buildGenericExample bs
-    ps = map parser es
-    is = map inputs es
-    rs = map result es
-    cs = map consumes' es
+prop_perm_Matches ps_ =
+  mutuallyDisjoint (map consumes ps_) ==>
+  forAllExs ps_ $ \exs ->
+  forAll (shuffle exs) $ \exs' ->
+    runParser (perm $ map toParser ps_) (concat $ map input exs')
+    === Right (map output exs')
 
-prop_perm_JoinsHelp bs =
+prop_perm_JoinsHelp ps_ =
   getHelp (perm ps) === foldMap getHelp ps
   where
-    ps = map (parser . buildGenericExample) bs
+    ps = map toParser ps_
 
 -- TODO: Improve tests for 'many', 'some', 'between' by generating multiple
 --       valid inputs for the same parser.
--- TODO: Try refactoring examples so that Example pieces are pattern-matched,
---       like it is done for 'Fun'.
 -- TODO: Test parse failures for *Char and *Read.
 -- TODO: Test that withVersion* can interrupt a parse in the middle.
