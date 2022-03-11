@@ -360,13 +360,13 @@ tests =
     ]
 
   , testGroup "many"
-    [ testProperty "MatchesOne"  prop_many_MatchesOne
+    [ testProperty "Matches"     prop_many_Matches
     , testProperty "MatchesZero" prop_many_MatchesZero
     , testProperty "AddsNoHelp"  prop_many_AddsNoHelp
     ]
 
   , testGroup "some"
-    [ testProperty "MatchesOne"     prop_some_MatchesOne
+    [ testProperty "Matches"        prop_some_Matches
     , testProperty "NotMatchesZero" prop_some_NotMatchesZero
     , testProperty "AddsNoHelp"     prop_some_AddsNoHelp
     ]
@@ -1289,9 +1289,9 @@ prop_rightParallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
 
 -- TODO: make this fail by improving GenericExample. Should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_many_MatchesOne (AnyParser p_ p) =
-  forAllExamples p_ $ \i o ->
-  runParser (many p) i === Right [o]
+prop_many_Matches (AnyParser p_ p) =
+  forAllShrink (listOf $ arbitraryEx p_) (shrinkList shrinkEx) $ \exs ->
+  runParser (many p) (concat $ map input exs) === (Right $ map output exs)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
@@ -1304,9 +1304,10 @@ prop_many_AddsNoHelp (AnyParser _ p) =
 
 -- TODO: make this fail by improving GenericExample. Should only work if
 -- @parser ex@ doesn't accept an empty input.
-prop_some_MatchesOne (AnyParser p_ p) =
-  forAllExamples p_ $ \i o ->
-  runParser (some p) i === Right [o]
+prop_some_Matches (AnyParser p_ p) =
+  forAllShrink (listOf $ arbitraryEx p_) (shrinkList shrinkEx) $ \exs ->
+  (not $ null exs) ==>
+  runParser (some p) (concat $ map input exs) === (Right $ map output exs)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
@@ -1376,7 +1377,6 @@ prop_perm_JoinsHelp ps_ =
   where
     ps = map toParser ps_
 
--- TODO: Improve tests for 'many', 'some', 'between' by generating multiple
---       valid inputs for the same parser.
+-- TODO: Improve tests for 'between' (don't use 'replicate').
 -- TODO: Test parse failures for *Char and *Read.
 -- TODO: Test that withVersion* can interrupt a parse in the middle.
