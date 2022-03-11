@@ -1291,7 +1291,7 @@ prop_rightParallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
 -- @parser ex@ doesn't accept an empty input.
 prop_many_Matches (AnyParser p_ p) =
   forAllShrink (listOf $ arbitraryEx p_) (shrinkList shrinkEx) $ \exs ->
-  runParser (many p) (concat $ map input exs) === (Right $ map output exs)
+  runParser (many p) (concatMap input exs) === (Right $ map output exs)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
@@ -1307,7 +1307,7 @@ prop_many_AddsNoHelp (AnyParser _ p) =
 prop_some_Matches (AnyParser p_ p) =
   forAllShrink (listOf $ arbitraryEx p_) (shrinkList shrinkEx) $ \exs ->
   (not $ null exs) ==>
-  runParser (some p) (concat $ map input exs) === (Right $ map output exs)
+  runParser (some p) (concatMap input exs) === (Right $ map output exs)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
@@ -1332,23 +1332,35 @@ prop_optional_AddsNoHelp (AnyParser _ p) =
 
 
 prop_between_Matches
-  (AnyArg s) (NonNegative low) (NonNegative a) (NonNegative b) =
-  runParser (between low high $ match s) (replicate x s)
-  === Right (replicate x s)
+  (AnyParser p_ p) (NonNegative low) (NonNegative a) (NonNegative b) =
+  forAllShrink
+    (sequenceA . replicate x $ arbitraryEx p_)
+    (shrinkElements shrinkEx)
+    $ \exs ->
+  runParser (between low high p) (concatMap input exs)
+  === (Right $ map output exs)
   where
     x = low + a
     high = x + b
 
 prop_between_TooMany
-  (AnyArg s) (NonNegative low) (NonNegative a) (Positive b) =
-  isLeft' $ runParser (between low high $ match s) (replicate x s)
+  (AnyParser p_ p) (NonNegative low) (NonNegative a) (Positive b) =
+  forAllShrink
+    (sequenceA . replicate x $ arbitraryEx p_)
+    (shrinkElements shrinkEx)
+    $ \exs ->
+  isLeft' $ runParser (between low high p) (concatMap input exs)
   where
     high = low + a
     x = high + b
 
 prop_between_TooFew
-  (AnyArg s) (NonNegative x) (Positive a) (NonNegative b) =
-  isLeft' $ runParser (between low high $ match s) (replicate x s)
+  (AnyParser p_ p) (NonNegative x) (Positive a) (NonNegative b) =
+  forAllShrink
+    (sequenceA . replicate x $ arbitraryEx p_)
+    (shrinkElements shrinkEx)
+    $ \exs ->
+  isLeft' $ runParser (between low high p) (concatMap input exs)
   where
     low = x + a
     high = low + b
@@ -1369,7 +1381,7 @@ prop_perm_Matches ps_ =
   mutuallyDisjoint (map consumes ps_) ==>
   forAllExs ps_ $ \exs ->
   forAll (shuffle exs) $ \exs' ->
-    runParser (perm $ map toParser ps_) (concat $ map input exs')
+    runParser (perm $ map toParser ps_) (concatMap input exs')
     === Right (map output exs')
 
 prop_perm_JoinsHelp ps_ =
@@ -1377,6 +1389,5 @@ prop_perm_JoinsHelp ps_ =
   where
     ps = map toParser ps_
 
--- TODO: Improve tests for 'between' (don't use 'replicate').
 -- TODO: Test parse failures for *Char and *Read.
 -- TODO: Test that withVersion* can interrupt a parse in the middle.
