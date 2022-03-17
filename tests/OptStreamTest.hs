@@ -746,11 +746,10 @@ prop_eject_EjectsAfter (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs xs) =
 prop_eject_EjectsMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs xs) =
   consumes p1_ `disjoint` consumes p2_ ==>
   forAllEx p1_ $ \ex1 ->
-  forAllEx p2_ $ \ex2 ->
+  forAllExamples p2_ $ \i2 o2 ->
   forAll (prefix $ pieces ex1) $ \pcs ->
   forAll (glue pcs) $ \i1 ->
-  forAll (glue $ pieces ex2) $ \i2 ->
-  runParser (eject p1 p2) (i1 ++ i2 ++ xs) === (Right . Left $ output ex2)
+  runParser (eject p1 p2) (i1 ++ i2 ++ xs) === (Right $ Left o2)
 
 prop_eject_EjectsLongAfter
   (AnyParser p1_ p1) (AnyArgs xs) (AnyParser p2_ p2) (AnyArgs ys) =
@@ -1133,11 +1132,10 @@ prop_leftAlternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
 prop_leftAlternative_MatchesMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) =
   consumes p1_ `disjoint` consumes p2_ ==>
   forAllEx p1_ $ \ex1 -> (not . null $ pieces ex1) ==>
-  forAllEx p2_ $ \ex2 ->
+  forAllExamples p2_ $ \i2 o2 ->
   forAll (properPrefix $ pieces ex1) $ \pcs ->
   forAll (glue pcs) $ \i1 ->
-  forAll (glue $ pieces ex2) $ \i2 ->
-  runParser (p1 <-|> p2) (i1 ++ i2) === Right (output ex2)
+  runParser (p1 <-|> p2) (i1 ++ i2) === Right o2
 
 prop_leftAlternative_LeftEmpty (AnyParser p_ p) =
   forAllExamples p_ $ \i o ->
@@ -1162,12 +1160,11 @@ prop_rightAlternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
 
 prop_rightAlternative_MatchesMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) =
   consumes p1_ `disjoint` consumes p2_ ==>
-  forAllEx p1_ $ \ex1 ->
+  forAllExamples p1_ $ \i1 o1 ->
   forAllEx p2_ $ \ex2 -> (not . null $ pieces ex2) ==>
   forAll (properPrefix $ pieces ex2) $ \pcs ->
   forAll (glue pcs) $ \i2 ->
-  forAll (glue $ pieces ex1) $ \i1 ->
-  runParser (p1 <|-> p2) (i2 ++ i1) === Right (output ex1)
+  runParser (p1 <|-> p2) (i2 ++ i1) === Right o1
 
 prop_rightAlternative_LeftEmpty (AnyParser p_ p) =
   forAllExamples p_ $ \i o ->
