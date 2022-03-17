@@ -28,7 +28,8 @@ import Test.QuickCheck
   , choose
   , counterexample
   , elements
-  , forAllShrinkShow
+  , forAll
+  , forAllShrink
   , frequency
   , genericShrink
   , ioProperty
@@ -806,16 +807,22 @@ data Example
   | ExAp Example Example
   deriving Show
 
-blocks :: Example -> [[String]]
-blocks (ExMatch i _) = [[i]]
-blocks (ExMAF s vs) = [s:map formatValue vs]
-blocks (ExParamShort s v) = [[s ++ formatValue v]]
-blocks (ExParamLong s v) = [[s ++ "=" ++ formatValue v]]
-blocks (ExFree v) = [[formatValue v]]
-blocks (ExAp l r) = blocks l ++ blocks r
+data Piece = PieceBlock [String]
+  deriving Show
 
-input :: Example -> [String]
-input = concat . blocks
+pieces :: Example -> [Piece]
+pieces (ExMatch i _) = [PieceBlock [i]]
+pieces (ExMAF s vs) = [PieceBlock $ s:map formatValue vs]
+pieces (ExParamShort s v) = [PieceBlock [s ++ formatValue v]]
+pieces (ExParamLong s v) = [PieceBlock [s ++ "=" ++ formatValue v]]
+pieces (ExFree v) = [PieceBlock [formatValue v]]
+pieces (ExAp l r) = pieces l ++ pieces r
+
+glue :: [Piece] -> Gen [String]
+glue = pure . concatMap (\(PieceBlock ss) -> ss)
+
+input :: Example -> Gen [String]
+input = glue . pieces
 
 output :: Example -> String
 output (ExMatch _ o) = o
@@ -870,16 +877,17 @@ shrinkEx (ExFree v) =
 shrinkEx (ExAp l r) = [ExAp l' r' | l' <- shrinkEx l, r' <- shrinkEx r]
 
 forAllEx :: Testable t => ParserDesc -> (Example -> t) -> Property
-forAllEx parserDesc = forAllShrinkShow gen shrinkEx showf where
-  gen = arbitraryEx parserDesc
-  showf = show . input
+forAllEx parserDesc = forAllShrink (arbitraryEx parserDesc) shrinkEx
 
 -- | Convenience wrapper around 'forAllEx'.
 forAllExamples :: Testable t
                => ParserDesc
                -> ([String] -> String -> t)
                -> Property
-forAllExamples desc f = forAllEx desc $ \ex -> f (input ex) (output ex)
+forAllExamples desc f =
+  forAllEx desc $ \ex ->
+  forAll (glue $ pieces ex) $ \i ->
+  f i (output ex)
 
 shrinkElements :: (a -> [a]) -> [a] -> [[a]]
 shrinkElements f as = work [] as where
@@ -887,8 +895,7 @@ shrinkElements f as = work [] as where
   work ls (r:rs) = [reverse ls ++ (r':rs) | r' <- f r] ++ work (r:ls) rs
 
 forAllExs :: Testable t => [ParserDesc] -> ([Example] -> t) -> Property
-forAllExs parserDescs = forAllShrinkShow gen shrinkf showf where
+forAllExs parserDescs = forAllShrink gen shrinkf where
   gen = traverse arbitraryEx parserDescs
   shrinkf = shrinkElements shrinkEx
-  showf = show . map input
 

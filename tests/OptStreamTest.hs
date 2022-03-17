@@ -609,8 +609,9 @@ prop_withHelp_MatchesHelp (AnyParser p_ p) =
 prop_withHelp_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
   not ("--help" `member` consumes p_) ==>
   forAllEx p_ $ \ex ->
-  forAll (prefix $ blocks ex) $ \pref ->
-  runParser p' (concat pref ++ ["--help"] ++ ys) === (Right . Left $ getHelp p')
+  forAll (prefix $ pieces ex) $ \pcs ->
+  forAll (glue pcs) $ \i ->
+  runParser p' (i ++ ["--help"] ++ ys) === (Right . Left $ getHelp p')
   where
     p' = withHelp p
 
@@ -629,9 +630,9 @@ prop_withHelp'_MatchesHelp (AnyParser p_ p) =
 prop_withHelp'_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
   not ("--help" `member` consumes p_) ==>
   forAllEx p_ $ \ex ->
-  forAll (prefix $ blocks ex) $ \pref ->
-    runParser (withHelp' p) (concat pref ++ ["--help"] ++ ys)
-    === (Right . Left $ getHelp p)
+  forAll (prefix $ pieces ex) $ \pcs ->
+  forAll (glue pcs) $ \i ->
+  runParser (withHelp' p) (i ++ ["--help"] ++ ys) === (Right . Left $ getHelp p)
 
 prop_withHelp'_AddsNoHelp (AnyParser _ p) =
   getHelp (withHelp' p) === getHelp p
@@ -648,8 +649,9 @@ prop_withSubHelp_MatchesHelp (AnyParser p_ p) =
 prop_withSubHelp_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
   not ("--help" `member` consumes p_) ==>
   forAllEx p_ $ \ex ->
-  forAll (prefix $ blocks ex) $ \pref ->
-  runParser (withSubHelp p) (concat pref ++ ["--help"] ++ ys)
+  forAll (prefix $ pieces ex) $ \pcs ->
+  forAll (glue pcs) $ \i ->
+  runParser (withSubHelp p) (i ++ ["--help"] ++ ys)
   === (Right . Left . getHelp $ withHelp p)
 
 prop_withSubHelp_ClearsHelp (AnyParser _ p) =
@@ -667,8 +669,9 @@ prop_withSubHelp'_MatchesHelp (AnyParser p_ p) =
 prop_withSubHelp'_MatchesHelpMiddle (AnyParser p_ p) (AnyArgs ys) =
   not ("--help" `member` consumes p_) ==>
   forAllEx p_ $ \ex ->
-  forAll (prefix $ blocks ex) $ \pref ->
-  runParser (withSubHelp' p) (concat pref ++ ["--help"] ++ ys)
+  forAll (prefix $ pieces ex) $ \pcs ->
+  forAll (glue pcs) $ \i ->
+  runParser (withSubHelp' p) (i ++ ["--help"] ++ ys)
   === (Right . Left $ getHelp p)
 
 prop_withSubHelp'_ClearsHelp (AnyParser _ p) =
@@ -744,9 +747,10 @@ prop_eject_EjectsMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) (AnyArgs xs) =
   consumes p1_ `disjoint` consumes p2_ ==>
   forAllEx p1_ $ \ex1 ->
   forAllEx p2_ $ \ex2 ->
-  forAll (prefix $ blocks ex1) $ \pref ->
-  runParser (eject p1 p2) (concat pref ++ input ex2 ++ xs)
-  === (Right . Left $ output ex2)
+  forAll (prefix $ pieces ex1) $ \pcs ->
+  forAll (glue pcs) $ \i1 ->
+  forAll (glue $ pieces ex2) $ \i2 ->
+  runParser (eject p1 p2) (i1 ++ i2 ++ xs) === (Right . Left $ output ex2)
 
 prop_eject_EjectsLongAfter
   (AnyParser p1_ p1) (AnyArgs xs) (AnyParser p2_ p2) (AnyArgs ys) =
@@ -1128,10 +1132,12 @@ prop_leftAlternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
 
 prop_leftAlternative_MatchesMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) =
   consumes p1_ `disjoint` consumes p2_ ==>
-  forAllEx p1_ $ \ex1 -> (not . null $ blocks ex1) ==>
+  forAllEx p1_ $ \ex1 -> (not . null $ pieces ex1) ==>
   forAllEx p2_ $ \ex2 ->
-  forAll (properPrefix $ blocks ex1) $ \pref ->
-  runParser (p1 <-|> p2) (concat pref ++ input ex2) === Right (output ex2)
+  forAll (properPrefix $ pieces ex1) $ \pcs ->
+  forAll (glue pcs) $ \i1 ->
+  forAll (glue $ pieces ex2) $ \i2 ->
+  runParser (p1 <-|> p2) (i1 ++ i2) === Right (output ex2)
 
 prop_leftAlternative_LeftEmpty (AnyParser p_ p) =
   forAllExamples p_ $ \i o ->
@@ -1157,9 +1163,11 @@ prop_rightAlternative_MatchesSecond (AnyParser p1_ p1) (AnyParser p2_ p2) =
 prop_rightAlternative_MatchesMiddle (AnyParser p1_ p1) (AnyParser p2_ p2) =
   consumes p1_ `disjoint` consumes p2_ ==>
   forAllEx p1_ $ \ex1 ->
-  forAllEx p2_ $ \ex2 -> (not . null $ blocks ex2) ==>
-  forAll (properPrefix $ blocks ex2) $ \pref ->
-  runParser (p1 <|-> p2) (concat pref ++ input ex1) === Right (output ex1)
+  forAllEx p2_ $ \ex2 -> (not . null $ pieces ex2) ==>
+  forAll (properPrefix $ pieces ex2) $ \pcs ->
+  forAll (glue pcs) $ \i2 ->
+  forAll (glue $ pieces ex1) $ \i1 ->
+  runParser (p1 <|-> p2) (i2 ++ i1) === Right (output ex1)
 
 prop_rightAlternative_LeftEmpty (AnyParser p_ p) =
   forAllExamples p_ $ \i o ->
@@ -1225,8 +1233,9 @@ prop_parallel_Mix (AnyParser p1_ p1) (AnyParser p2_ p2) =
   consumes p1_ `disjoint` consumes p2_ ==>
   forAllEx p1_ $ \ex1 ->
   forAllEx p2_ $ \ex2 ->
-  forAll (mix (blocks ex1) (blocks ex2)) $ \bs ->
-  runParser ((,) <$> p1 <#> p2) (concat bs) === Right (output ex1, output ex2)
+  forAll (mix (pieces ex1) (pieces ex2)) $ \pcs ->
+  forAll (glue pcs) $ \i ->
+  runParser ((,) <$> p1 <#> p2) i === Right (output ex1, output ex2)
 
 prop_parallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
   getHelp ((,) <$> p1 <#> p2) === getHelp p1 <> getHelp p2
@@ -1291,7 +1300,8 @@ prop_rightParallel_JoinsHelp (AnyParser _ p1) (AnyParser _ p2) =
 -- @parser ex@ doesn't accept an empty input.
 prop_many_Matches (AnyParser p_ p) =
   forAllShrink (listOf $ arbitraryEx p_) (shrinkList shrinkEx) $ \exs ->
-  runParser (many p) (concatMap input exs) === (Right $ map output exs)
+  forAll (traverse (glue . pieces) exs) $ \is ->
+  runParser (many p) (concat is) === (Right $ map output exs)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
@@ -1307,7 +1317,8 @@ prop_many_AddsNoHelp (AnyParser _ p) =
 prop_some_Matches (AnyParser p_ p) =
   forAllShrink (listOf $ arbitraryEx p_) (shrinkList shrinkEx) $ \exs ->
   (not $ null exs) ==>
-  runParser (some p) (concatMap input exs) === (Right $ map output exs)
+  forAll (traverse (glue . pieces) exs) $ \is ->
+  runParser (some p) (concat is) === (Right $ map output exs)
 
 -- TODO: make this fail by improving GenericExample. This should only work if
 -- @parser ex@ doesn't accept an empty input.
@@ -1337,8 +1348,8 @@ prop_between_Matches
     (sequenceA . replicate x $ arbitraryEx p_)
     (shrinkElements shrinkEx)
     $ \exs ->
-  runParser (between low high p) (concatMap input exs)
-  === (Right $ map output exs)
+  forAll (traverse (glue . pieces) exs) $ \is ->
+  runParser (between low high p) (concat is) === (Right $ map output exs)
   where
     x = low + a
     high = x + b
@@ -1349,7 +1360,8 @@ prop_between_TooMany
     (sequenceA . replicate x $ arbitraryEx p_)
     (shrinkElements shrinkEx)
     $ \exs ->
-  isLeft' $ runParser (between low high p) (concatMap input exs)
+  forAll (traverse (glue . pieces) exs) $ \is -> 
+  isLeft' $ runParser (between low high p) (concat is)
   where
     high = low + a
     x = high + b
@@ -1360,7 +1372,8 @@ prop_between_TooFew
     (sequenceA . replicate x $ arbitraryEx p_)
     (shrinkElements shrinkEx)
     $ \exs ->
-  isLeft' $ runParser (between low high p) (concatMap input exs)
+  forAll (traverse (glue . pieces) exs) $ \is ->
+  isLeft' $ runParser (between low high p) (concat is)
   where
     low = x + a
     high = low + b
@@ -1381,8 +1394,8 @@ prop_perm_Matches ps_ =
   mutuallyDisjoint (map consumes ps_) ==>
   forAllExs ps_ $ \exs ->
   forAll (shuffle exs) $ \exs' ->
-    runParser (perm $ map toParser ps_) (concatMap input exs')
-    === Right (map output exs')
+  forAll (traverse (glue . pieces) exs') $ \is' ->
+  runParser (perm $ map toParser ps_) (concat is') === Right (map output exs')
 
 prop_perm_JoinsHelp ps_ =
   getHelp (perm ps) === foldMap getHelp ps
