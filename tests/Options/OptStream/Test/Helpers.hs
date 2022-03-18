@@ -724,15 +724,18 @@ instance Show ParserDesc where
 
 
 instance Arbitrary ParserDesc where
-  arbitrary = oneof
-    [ DescMatch <$> arbitraryArg
-    , DescMAF <$> arbitraryArg <*> arbitrary
-    , DescMatchShort <$> arbitraryChar
-    , DescFlag <$> arbitrary <*> arbitraryLegals <*> arbitrary
-    , DescParam <$> arbitrary <*> arbitraryLegals <*> arbitrary <*> arbitrary
-    , DescMultiParam <$> arbitraryLegals <*> arbitrary <*> arbitrary
-    , DescFreeArg <$> arbitrary <*> arbitrary <*> arbitrary
-    , DescAp <$> arbitrary <*> arbitrary
+  -- Frequencies are are adjusted in order to have a roughly 33%-33%-33% split
+  -- between atomic block parsers, atomic short flag parsers, and compound
+  -- parsers.
+  arbitrary = frequency
+    [ (1, DescMatch <$> arbitraryArg)
+    , (1, DescMAF <$> arbitraryArg <*> arbitrary)
+    , (5, DescMatchShort <$> arbitraryChar)
+    , (1, DescFlag <$> arbitrary <*> arbitraryLegals <*> arbitrary)
+    , (1, DescParam <$> arbitrary <*> arbitraryLegals <*> arbitrary <*> arbitrary)
+    , (1, DescMultiParam <$> arbitraryLegals <*> arbitrary <*> arbitrary)
+    , (1, DescFreeArg <$> arbitrary <*> arbitrary <*> arbitrary)
+    , (5, DescAp <$> arbitrary <*> arbitrary)
     ]
 
   shrink (DescMatch s) = [DescMatch s' | s' <- shrink s]
