@@ -800,6 +800,7 @@ instance Arbitrary AnyParser where
 -- | Represents an input example for a parser that's expected to succeed.
 data Example
   = ExMatch String String
+  | ExMatchShort Char String
   | ExMAF String [Value]
   | ExParamShort String Value
   | ExParamLong String Value
@@ -807,11 +808,14 @@ data Example
   | ExAp Example Example
   deriving Show
 
-data Piece = PieceBlock [String]
+data Piece
+  = PieceBlock [String]
+  | PieceShort Char
   deriving Show
 
 pieces :: Example -> [Piece]
 pieces (ExMatch i _) = [PieceBlock [i]]
+pieces (ExMatchShort c _) = [PieceShort c]
 pieces (ExMAF s vs) = [PieceBlock $ s:map formatValue vs]
 pieces (ExParamShort s v) = [PieceBlock [s ++ formatValue v]]
 pieces (ExParamLong s v) = [PieceBlock [s ++ "=" ++ formatValue v]]
@@ -819,13 +823,22 @@ pieces (ExFree v) = [PieceBlock [formatValue v]]
 pieces (ExAp l r) = pieces l ++ pieces r
 
 glue :: [Piece] -> Gen [String]
-glue = pure . concatMap (\(PieceBlock ss) -> ss)
+glue [] = pure []
+glue ((PieceBlock ss):ps) = (ss ++) <$> glue ps
+glue ((PieceShort c):ps) = doGlue [c] ps where
+  doGlue :: [Char] -> [Piece] -> Gen [String]
+  doGlue cs ((PieceShort c'):ps') = oneof
+    [ doGlue (c':cs) ps'
+    , (('-':reverse cs):) <$> doGlue [c'] ps'
+    ]
+  doGlue cs ps' = (('-':reverse cs):) <$> glue ps'
 
 input :: Example -> Gen [String]
 input = glue . pieces
 
 output :: Example -> String
 output (ExMatch _ o) = o
+output (ExMatchShort _ o) = o
 output (ExMAF _ vs) = concat $ map formatValue vs
 output (ExParamShort _ v) = formatValue v
 output (ExParamLong _ v) = formatValue v
@@ -840,8 +853,8 @@ arbitraryEx :: ParserDesc -> Gen Example
 arbitraryEx (DescMatch s) = pure $ ExMatch s s
 arbitraryEx (DescMAF s (DescFollower ns)) =
   ExMAF s <$> sequenceA [arbitraryValue vt | DescNext vt _ <- ns]
-arbitraryEx (DescMatchShort c) = pure $ ExMatch ['-', c] [c]
-arbitraryEx (DescFlag _ fs _) = ExMatch <$> elements fs <*> pure ""
+arbitraryEx (DescMatchShort c) = pure $ ExMatchShort c [c]
+arbitraryEx (DescFlag _ fs _) = ExMatch <$> elements fs <*> pure ""  -- TODO: use ExMatchShort when necessary.
 arbitraryEx (DescParam vt fs _ _) = do
   form <- elements fs
   case form of
@@ -868,6 +881,7 @@ arbitraryEx (DescAp l r) =
 -- below.
 shrinkEx :: Example -> [Example]
 shrinkEx (ExMatch _ _) = []
+shrinkEx (ExMatchShort _ _) = []
 shrinkEx (ExMAF s vs) = [ExMAF s vs' | vs' <- traverse genericShrink vs]
 shrinkEx (ExParamShort s v) =
   [ExParamShort s v' | v' <- genericShrink v, not . P.null $ formatValue v']
