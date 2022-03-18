@@ -235,34 +235,19 @@ type DoneParser a = Either DoneError a
 --   'Right' contains the final state of the parser.
 type EndHandler a = Either (List String) (DoneParser a)
 
--- | A command line argument handler. Represents what the parser will do if the
--- next token it receives is a normal command line argument. The possibilities
--- are:
---
---   * Skip the argument (return 'Nothing'). In this case the parser's state
---   doesn't change.
---
---   * Consume the argument (return 'Just'). In this case 'Just' should contain
---   a 'RawFollower' that should consume zero or more arguments immediately
---   after the one that's been consumed. After that the follower should return
---   a new 'RawParser' that will continue the parse.
-type ArgHandler a = String -> Maybe (RawFollower (RawParser a))
+data Action a
+  = ConsumeBlock (RawFollower a)
+  | ConsumeShort a
 
--- | A short flag handler. Represents what the parser will do if the next token
--- it receives is a short flag. A parser /may/ receive a short flag token if
--- the command line contains an argument of the form @-XYZ@, where @XYZ@ is a
--- sequence of at least two characters, and no parser has consumed the argument
--- @-XYZ@ as a whole.
---
--- The possibilities are:
---
---   * Skip the token (return 'Nothing'). In this case the parser's state
---   doesn't change.
---
---   * Consume the token (return 'Just'). In this case 'Just' should contain a
---   'RawParser' that will continue the parse. Note that unlike @ArgHandler@,
---   @ShortHandler@ doesn't have the possibility to spawn a follower.
-type ShortHandler a = Char -> Maybe (RawParser a)
+instance Functor Action where
+  fmap f (ConsumeBlock fa) = ConsumeBlock $ fmap f fa
+  fmap f (ConsumeShort a) = ConsumeShort $ f a
+
+abort :: Action a -> DoneParser b -> Action (RawParser b)
+abort (ConsumeBlock _) db = ConsumeBlock . return $ Done db
+abort (ConsumeShort _) db = ConsumeShort $ Done db
+
+type InputHandler a = Maybe String -> Maybe Char -> Maybe (Action (RawParser a))
 
 -- | A 'RawParser' processes part of a stream of command line arguments and
 -- produces an output value of type @a@. 'RawParser' is the type that
@@ -276,7 +261,7 @@ type ShortHandler a = Char -> Maybe (RawParser a)
 --   'Applicative'.
 data RawParser a
   = Done (DoneParser a)
-  | Scan (EndHandler a) (ArgHandler a) (ShortHandler a)
+  | Scan (EndHandler a) (InputHandler a)
 
 
 data ShortsError
@@ -292,8 +277,9 @@ runShorts arg = doRun where
   doRun ctx pa [] = Right (ctx, pa)
   doRun ctx (Done (Left e)) (_:_) = Left $ SEDoneError ctx e
   doRun _   (Done (Right _)) (c:_) = Left $ SEUnexpectedChar c
-  doRun _   (Scan _ _ shortH) (c:cs) = case shortH c of
-    Just pa' -> doRun (CtxShort arg c) pa' cs
+  doRun _   (Scan _ inputH) (c:cs) = case inputH Nothing (Just c) of
+    Just (ConsumeShort pa') -> doRun (CtxShort arg c) pa' cs
+    Just (ConsumeBlock _) -> error "ConsumeBlock in response to short input"
     Nothing -> Left $ SEUnexpectedChar c
 
 missingArg :: Context -> List String -> ParserError
@@ -306,6 +292,7 @@ toParserError :: Context -> DoneError -> ParserError
 toParserError ctx (DEMissingArg vs) = MissingArg ctx vs
 toParserError ctx (DECustomError msg) = CustomError ctx msg
 
+-- TODO: update to use InputHandler correctly.
 -- | See 'Options.OptStream.runParser'.
 runParser :: RawParser a -> [String] -> Either ParserError a
 runParser = doRun CtxStart where
@@ -313,20 +300,22 @@ runParser = doRun CtxStart where
   doRun _   (Done (Right a)) [] = Right $ a
   doRun _   (Done (Right _)) (s:_) = Left $ UnexpectedArg s
 
-  doRun _   (Scan (Left xs) _ _) [] = Left $ missingArg CtxEnd xs
-  doRun _   (Scan (Right (Right a)) _ _) [] = Right a
-  doRun _   (Scan (Right (Left e)) _ _) [] = Left $ toParserError CtxEnd e
+  doRun _   (Scan (Left xs) _) [] = Left $ missingArg CtxEnd xs
+  doRun _   (Scan (Right (Right a)) _) [] = Right a
+  doRun _   (Scan (Right (Left e)) _) [] = Left $ toParserError CtxEnd e
 
-  doRun ctx pa@(Scan _ argH shortH) (s:ss) = case argH s of
-    Just fpa -> case runFollower (CtxArg s) fpa ss of
+  doRun ctx pa@(Scan _ inputH) (s:ss) = case inputH (Just s) Nothing of
+    Just (ConsumeBlock fpa) -> case runFollower (CtxArg s) fpa ss of
       Right (ctx', pa', ss') -> doRun ctx' pa' ss'
       Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
       Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
+    Just (ConsumeShort _) -> error "ConsumeShort action in response to long input"
     Nothing -> case s of
-      ('-':cs@(c:_:_)) | isJust (shortH c) -> case runShorts s ctx pa cs of
-        Right (ctx', pa') -> doRun ctx' pa' ss
-        Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
-        Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
+      ('-':cs@(c:_:_)) | isJust (inputH Nothing (Just c)) ->
+        case runShorts s ctx pa cs of
+          Right (ctx', pa') -> doRun ctx' pa' ss
+          Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
+          Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
       _ -> Left $ UnexpectedArg s
 
 
@@ -362,117 +351,88 @@ instance Monad RawParser where
 
   Done (Right a) >>= f = f a
   Done (Left e) >>= _ = Done $ Left e
-  Scan endH argH shortH >>= f = Scan endH' argH' shortH' where
+  Scan endH inputH >>= f = Scan endH' inputH' where
     endH' = case endH of
       Left xs -> Left xs
       Right (Left e) -> Right (Left e)
       Right (Right a) -> case f a of
         Done db -> Right db
-        Scan endH'' _ _ -> endH''
-    argH' = (fmap . fmap) (>>= f) . argH
-    shortH' = fmap (>>= f) . shortH
+        Scan endH'' _ -> endH''
+    inputH' ms mc = (fmap . fmap) (>>= f) $ inputH ms mc
 
 instance MonadFail RawParser where
   fail = Done . Left . DECustomError
 
 instance Alternative RawParser where
-  empty = Scan (Left mempty) (const Nothing) (const Nothing)
+  empty = Scan (Left mempty) (const $ const Nothing)
 
   Done da <|> _ = Done da
   _ <|> Done da = Done da
-  Scan endH argH shortH <|> Scan endH' argH' shortH' =
-    Scan endH'' argH'' shortH'' where
+  Scan endH inputH <|> Scan endH' inputH' =
+    Scan endH'' inputH'' where
       endH'' = endH `endAlternative` endH'
-      argH'' s = argH s <|> argH' s
-      shortH'' s = shortH s <|> shortH' s
+      inputH'' ms mc = inputH ms mc <|> inputH' ms mc
 
 instance SelectiveParser RawParser where
   Done (Right f) <#> pa = fmap f pa
   Done (Left e) <#> _ = Done $ Left e
   pf <#> Done (Right a) = fmap ($ a) pf
   _ <#> Done (Left e) = Done $ Left e
-  pf@(Scan endH argH shortH) <#> pa@(Scan endH' argH' shortH') =
-    Scan endH'' argH'' shortH'' where
+  pf@(Scan endH inputH) <#> pa@(Scan endH' inputH') =
+    Scan endH'' inputH'' where
       endH'' = endH `endParallel` endH'
-      argH'' s = case argH s of
-        Just fpf -> Just $ fmap (<#> pa) fpf
-        Nothing -> (fmap . fmap) (pf <#>) $ argH' s
-      shortH'' c = case shortH c of
-        Just pf' -> Just $ pf' <#> pa
-        Nothing -> fmap (pf <#>) $ shortH' c
+      inputH'' ms mc = case inputH ms mc of
+        Just apf -> Just $ fmap (<#> pa) apf
+        Nothing -> (fmap . fmap) (pf <#>) $ inputH' ms mc
 
   Done (Right f) <-#> pa = fmap f pa
   Done (Left e) <-#> _ = Done $ Left e
-  Scan (Right df) _ _ <-#> Done da = Done $ df <*> da
-  Scan (Left xs) _ _ <-#> Done (Right _) = Done $ doneMissingArg xs
-  Scan (Left _) _ _ <-#> Done (Left e) = Done $ Left e
-  Scan endH argH shortH <-#> pa@(Scan endH' argH' shortH') =
-    Scan endH'' argH'' shortH'' where
-      endH'' = endH `endParallel` endH'
-      argH'' s = case argH s of
-        Just fpf -> Just $ fmap (<-#> pa) fpf
-        Nothing -> case argH' s of
-          Just fpa -> case endH of
-            Right (Right f) -> Just $ (fmap . fmap) f fpa
-            Right (Left e) -> Just . return . Done $ Left e
-            Left xs -> Just . return . Done $ doneMissingArg xs
-          Nothing -> Nothing
-      shortH'' c = case shortH c of
-        Just pf -> Just $ pf <-#> pa
-        Nothing -> case shortH' c of
-          Just pa' -> case endH of
-            Right (Right f) -> Just $ fmap f pa'
-            Right (Left e) -> Just . Done $ Left e
-            Left xs -> Just . Done $ doneMissingArg xs
-          Nothing -> Nothing
+  Scan (Right df) _ <-#> Done da = Done $ df <*> da
+  Scan (Left xs) _ <-#> Done (Right _) = Done $ doneMissingArg xs
+  Scan (Left _) _ <-#> Done (Left e) = Done $ Left e
+  Scan endH inputH <-#> pa@(Scan endH' inputH') = Scan endH'' inputH'' where
+    endH'' = endH `endParallel` endH'
+    inputH'' ms mc = case inputH ms mc of
+      Just apf -> Just $ fmap (<-#> pa) apf
+      Nothing -> case inputH' ms mc of
+        Just apa -> case endH of
+          Right (Right f) -> Just $ (fmap . fmap) f apa
+          Right (Left e) -> Just . abort apa $ Left e
+          Left xs -> Just . abort apa $ doneMissingArg xs
+        Nothing -> Nothing
 
   Done df <#-> Done da = Done $ df <*> da
-  Done df <#-> Scan (Right da) _ _ = Done $ df <*> da
-  Done (Right _) <#-> Scan (Left xs) _ _ = Done $ doneMissingArg xs
-  Done (Left e) <#-> Scan (Left _) _ _ = Done $ Left e
+  Done df <#-> Scan (Right da) _ = Done $ df <*> da
+  Done (Right _) <#-> Scan (Left xs) _ = Done $ doneMissingArg xs
+  Done (Left e) <#-> Scan (Left _) _ = Done $ Left e
   pf <#-> Done (Right a) = fmap ($ a) pf
   _ <#-> Done (Left e) = Done $ Left e
-  pf@(Scan endH argH shortH) <#-> Scan endH' argH' shortH' =
-    Scan endH'' argH'' shortH'' where
-      endH'' =  endH `endParallel` endH'
-      argH'' s = case argH s of
-        Just fpf -> case endH' of
-          Right (Right a) -> Just $ (fmap . fmap) ($ a) fpf
-          Right (Left e) -> Just . return . Done $ Left e
-          Left xs -> Just . return . Done $ doneMissingArg xs
-        Nothing -> (fmap . fmap) (pf <#->) $ argH' s
-      shortH'' c = case shortH c of
-        Just pf' -> case endH' of
-          Right (Right a) -> Just $ fmap ($ a) pf'
-          Right (Left e) -> Just . Done $ Left e
-          Left xs -> Just . Done $ doneMissingArg xs
-        Nothing -> fmap (pf <#->) $ shortH' c
+  pf@(Scan endH inputH) <#-> Scan endH' inputH' = Scan endH'' inputH'' where
+    endH'' =  endH `endParallel` endH'
+    inputH'' ms mc = case inputH ms mc of
+      Just apf -> case endH' of
+        Right (Right a) -> Just $ (fmap . fmap) ($ a) apf
+        Right (Left e) -> Just . abort apf $ Left e
+        Left xs -> Just . abort apf $ doneMissingArg xs
+      Nothing -> (fmap . fmap) (pf <#->) $ inputH' ms mc
 
   Done da <-|> _ = Done da
-  Scan _ _ _ <-|> Done da = Done da
-  Scan endH argH shortH <-|> r@(Scan endH' argH' shortH') =
-    Scan endH'' argH'' shortH'' where
-      endH'' = endH `endAlternative` endH'
-      argH'' s = case argH s of
-        Just rpa -> Just $ fmap (<-|> r) rpa
-        Nothing -> argH' s
-      shortH'' c = case shortH c of
-        Just pa -> Just $ pa <-|> r
-        Nothing -> shortH' c
+  Scan _ _ <-|> Done da = Done da
+  Scan endH inputH <-|> r@(Scan endH' inputH') = Scan endH'' inputH'' where
+    endH'' = endH `endAlternative` endH'
+    inputH'' ms mc = case inputH ms mc of
+      Just apa -> Just $ fmap (<-|> r) apa
+      Nothing -> inputH' ms mc
 
   Done da <|-> _ = Done da
-  Scan _ _ _ <|-> Done da = Done da
-  l@(Scan endH argH shortH) <|-> Scan endH' argH' shortH' =
-    Scan endH'' argH'' shortH''  where
-      endH'' = endH `endAlternative` endH'
-      argH'' s = case argH s of
-        Just rpa -> Just rpa
-        Nothing -> (fmap . fmap) (l <|->) $ argH' s
-      shortH'' c = case shortH c of
-        Just pa -> Just pa
-        Nothing -> fmap (l <|->) $ shortH' c
+  Scan _ _ <|-> Done da = Done da
+  l@(Scan endH inputH) <|-> Scan endH' inputH' = Scan endH'' inputH''  where
+    endH'' = endH `endAlternative` endH'
+    inputH'' ms mc = case inputH ms mc of
+      Just apa -> Just apa
+      Nothing -> (fmap . fmap) (l <|->) $ inputH' ms mc
 
-  eof = Scan (Right $ Right ()) (const Nothing) (const Nothing)
+  eof = Scan (Right $ Right ()) (const $ const Nothing)
 
 
 
@@ -488,11 +448,12 @@ block :: String
       -> RawParser a
          -- ^ A 'RawParser' that consumes one consecutive block of command line
          -- arguments.
-block name f = Scan endH argH shortH where
+block name f = Scan endH inputH where
   endH = Left $ single name
-  argH = (fmap . fmap) return . f
-  shortH = const Nothing
+  inputH (Just s) _ = fmap (ConsumeBlock . fmap return) $ f s
+  inputH _ _ = Nothing
 
+-- TODO: don't consume the long version once runParser is updated.
 -- | See 'Options.OptStream.short'.
 short :: String
          -- ^ Short flag name for "missing argument" error messages. Arbitrary
@@ -501,18 +462,17 @@ short :: String
          -- ^ A function that decides whether to skip or consume a short flag.
       -> RawParser a
          -- ^ A 'RawParser' that consumes one short flag.
-short name f = Scan endH argH shortH where
+short name f = Scan endH inputH where
   endH = Left $ single name
-  argH s = case s of
-    ['-', c] | Just a <- f c -> Just . return . return $ a
-    _ -> Nothing
-  shortH c = case f c of
-    Just a -> Just $ return a
-    Nothing -> Nothing
+  inputH (Just ['-', c]) _ | Just a <- f c =
+    Just . ConsumeBlock . return . return $ a
+  inputH _ (Just c) | Just a <- f c =
+    Just . ConsumeShort . return $ a
+  inputH _ _ = Nothing
 
 -- | See 'Options.OptStream.quiet'.
 quiet :: RawParser a -> RawParser a
-quiet (Scan (Left _) argH shortH) = Scan (Left mempty) argH shortH
+quiet (Scan (Left _) inputH) = Scan (Left mempty) inputH
 quiet x = x
 
 

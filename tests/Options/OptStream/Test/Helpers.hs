@@ -854,7 +854,10 @@ arbitraryEx (DescMatch s) = pure $ ExMatch s s
 arbitraryEx (DescMAF s (DescFollower ns)) =
   ExMAF s <$> sequenceA [arbitraryValue vt | DescNext vt _ <- ns]
 arbitraryEx (DescMatchShort c) = pure $ ExMatchShort c [c]
-arbitraryEx (DescFlag _ fs _) = ExMatch <$> elements fs <*> pure ""  -- TODO: use ExMatchShort when necessary.
+arbitraryEx (DescFlag WithoutBundling fs _) = ExMatch <$> elements fs <*> pure ""
+arbitraryEx (DescFlag WithBundling fs _) = f <$> elements fs where
+  f ('-':c:[]) | c /=  '-' = ExMatchShort c ""
+  f s = ExMatch s ""
 arbitraryEx (DescParam vt fs _ _) = do
   form <- elements fs
   case form of
