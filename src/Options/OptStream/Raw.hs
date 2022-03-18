@@ -292,7 +292,7 @@ toParserError :: Context -> DoneError -> ParserError
 toParserError ctx (DEMissingArg vs) = MissingArg ctx vs
 toParserError ctx (DECustomError msg) = CustomError ctx msg
 
--- TODO: update to use InputHandler correctly.
+-- TODO: try to eliminate code duplication below.
 -- | See 'Options.OptStream.runParser'.
 runParser :: RawParser a -> [String] -> Either ParserError a
 runParser = doRun CtxStart where
@@ -304,19 +304,24 @@ runParser = doRun CtxStart where
   doRun _   (Scan (Right (Right a)) _) [] = Right a
   doRun _   (Scan (Right (Left e)) _) [] = Left $ toParserError CtxEnd e
 
+  doRun ctx pa@(Scan _ inputH) (s@('-':(c:cs)):ss) = case inputH (Just s) (Just c) of
+    Just (ConsumeBlock fpa) -> case runFollower (CtxArg s) fpa ss of
+      Right (ctx', pa', ss') -> doRun ctx' pa' ss'
+      Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
+      Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
+    Just (ConsumeShort pa') -> case runShorts s (CtxShort s c) pa' cs of
+      Right (ctx', pa'') -> doRun ctx' pa'' ss
+      Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
+      Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
+    Nothing -> Left $ UnexpectedArg s
+
   doRun ctx pa@(Scan _ inputH) (s:ss) = case inputH (Just s) Nothing of
     Just (ConsumeBlock fpa) -> case runFollower (CtxArg s) fpa ss of
       Right (ctx', pa', ss') -> doRun ctx' pa' ss'
       Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
       Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
     Just (ConsumeShort _) -> error "ConsumeShort action in response to long input"
-    Nothing -> case s of
-      ('-':cs@(c:_:_)) | isJust (inputH Nothing (Just c)) ->
-        case runShorts s ctx pa cs of
-          Right (ctx', pa') -> doRun ctx' pa' ss
-          Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
-          Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
-      _ -> Left $ UnexpectedArg s
+    Nothing -> Left $ UnexpectedArg s
 
 
 -- ** Instances
@@ -464,10 +469,7 @@ short :: String
          -- ^ A 'RawParser' that consumes one short flag.
 short name f = Scan endH inputH where
   endH = Left $ single name
-  inputH (Just ['-', c]) _ | Just a <- f c =
-    Just . ConsumeBlock . return . return $ a
-  inputH _ (Just c) | Just a <- f c =
-    Just . ConsumeShort . return $ a
+  inputH _ (Just c) = fmap (ConsumeShort . return) $ f c
   inputH _ _ = Nothing
 
 -- | See 'Options.OptStream.quiet'.

@@ -664,8 +664,9 @@ toParser (DescAp p1 p2) = (++) <$> toParser p1 <*> toParser p2
 consumes :: ParserDesc -> ArgLanguage
 consumes (DescMatch s) = singleton s
 consumes (DescMAF s _) = singleton s
-consumes (DescMatchShort c) = singleton ['-', c]
-consumes (DescFlag _ fs _) = mconcat $ map singleton fs
+consumes (DescMatchShort c) = withPrefix ['-', c]
+consumes (DescFlag WithoutBundling fs _) = mconcat $ map singleton fs
+consumes (DescFlag WithBundling fs _) = mconcat $ map withPrefix fs
 consumes (DescParam _ fs _ _) = mconcat $ map withPrefix fs
 consumes (DescMultiParam fs _ _) = mconcat $ map singleton fs
 consumes (DescFreeArg _ _ _) = freeArgs
