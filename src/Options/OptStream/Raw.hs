@@ -243,9 +243,9 @@ instance Functor Action where
   fmap f (ConsumeBlock fa) = ConsumeBlock $ fmap f fa
   fmap f (ConsumeShort a) = ConsumeShort $ f a
 
-abort :: Action a -> DoneParser b -> Action (RawParser b)
-abort (ConsumeBlock _) db = ConsumeBlock . return $ Done db
-abort (ConsumeShort _) db = ConsumeShort $ Done db
+abort :: Action a -> b -> Action b
+abort (ConsumeBlock _) b = ConsumeBlock $ return b
+abort (ConsumeShort _) b = ConsumeShort b
 
 type InputHandler a = Maybe String -> Maybe Char -> Maybe (Action (RawParser a))
 
@@ -292,7 +292,6 @@ toParserError :: Context -> DoneError -> ParserError
 toParserError ctx (DEMissingArg vs) = MissingArg ctx vs
 toParserError ctx (DECustomError msg) = CustomError ctx msg
 
--- TODO: try to eliminate code duplication below.
 -- | See 'Options.OptStream.runParser'.
 runParser :: RawParser a -> [String] -> Either ParserError a
 runParser = doRun CtxStart where
@@ -304,24 +303,23 @@ runParser = doRun CtxStart where
   doRun _   (Scan (Right (Right a)) _) [] = Right a
   doRun _   (Scan (Right (Left e)) _) [] = Left $ toParserError CtxEnd e
 
-  doRun ctx pa@(Scan _ inputH) (s@('-':(c:cs)):ss) = case inputH (Just s) (Just c) of
+  doRun ctx pa@(Scan _ inputH) (s:ss) = case inputH (Just s) mc of
     Just (ConsumeBlock fpa) -> case runFollower (CtxArg s) fpa ss of
       Right (ctx', pa', ss') -> doRun ctx' pa' ss'
       Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
       Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
-    Just (ConsumeShort pa') -> case runShorts s (CtxShort s c) pa' cs of
-      Right (ctx', pa'') -> doRun ctx' pa'' ss
-      Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
-      Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
+    Just (ConsumeShort pa') -> case shorts of
+      Just (c, cs) -> case runShorts s (CtxShort s c) pa' cs of
+        Right (ctx', pa'') -> doRun ctx' pa'' ss
+        Left (SEUnexpectedChar c') -> Left $ UnexpectedChar c' s
+        Left (SEDoneError ctx' e) -> Left $ toParserError ctx' e
+      Nothing -> error "ConsumeShort in response to long input"
     Nothing -> Left $ UnexpectedArg s
-
-  doRun ctx pa@(Scan _ inputH) (s:ss) = case inputH (Just s) Nothing of
-    Just (ConsumeBlock fpa) -> case runFollower (CtxArg s) fpa ss of
-      Right (ctx', pa', ss') -> doRun ctx' pa' ss'
-      Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
-      Left (FollowerCustomError ctx' e) -> Left $ CustomError ctx' e
-    Just (ConsumeShort _) -> error "ConsumeShort action in response to long input"
-    Nothing -> Left $ UnexpectedArg s
+    where
+      shorts = case s of
+        ('-':(c:cs)) -> Just (c, cs)
+        _ -> Nothing
+      mc = fmap fst shorts
 
 
 -- ** Instances
@@ -402,8 +400,8 @@ instance SelectiveParser RawParser where
       Nothing -> case inputH' ms mc of
         Just apa -> case endH of
           Right (Right f) -> Just $ (fmap . fmap) f apa
-          Right (Left e) -> Just . abort apa $ Left e
-          Left xs -> Just . abort apa $ doneMissingArg xs
+          Right (Left e) -> Just . abort apa . Done $  Left e
+          Left xs -> Just . abort apa . Done $  doneMissingArg xs
         Nothing -> Nothing
 
   Done df <#-> Done da = Done $ df <*> da
@@ -417,8 +415,8 @@ instance SelectiveParser RawParser where
     inputH'' ms mc = case inputH ms mc of
       Just apf -> case endH' of
         Right (Right a) -> Just $ (fmap . fmap) ($ a) apf
-        Right (Left e) -> Just . abort apf $ Left e
-        Left xs -> Just . abort apf $ doneMissingArg xs
+        Right (Left e) -> Just . abort apf . Done $ Left e
+        Left xs -> Just . abort apf . Done $  doneMissingArg xs
       Nothing -> (fmap . fmap) (pf <#->) $ inputH' ms mc
 
   Done da <-|> _ = Done da
