@@ -26,7 +26,4 @@ main = do
     $ footer "Example: demo -b --int=42 foo"
     $ optionsP
 
-  putStrLn $ "String parameter   : " ++ show (strParam opts)
-  putStrLn $ "Integer parameter  : " ++ show (intParam opts)
-  putStrLn $ "Boolean flag       : " ++ show (boolFlag opts)
-  putStrLn $ "Positional argument: " ++ show (positional opts)
+  print opts

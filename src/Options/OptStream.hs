@@ -36,10 +36,7 @@ main = do
     $ 'footer' "Example: demo -b --int=42 foo"
     $ optionsP
 
-  putStrLn $ "String parameter   : " ++ show (strParam opts)
-  putStrLn $ "Integer parameter  : " ++ show (intParam opts)
-  putStrLn $ "Boolean flag       : " ++ show (boolFlag opts)
-  putStrLn $ "Positional argument: " ++ show (positional opts)
+  print opts
 @
 
 Note that in the code above:
@@ -58,16 +55,10 @@ Note that in the code above:
 ==== Demo outputs:
 
 >>> ./demo -s foo -i 42 -b bar
-String parameter   : "foo"
-Integer parameter  : 42
-Boolean flag       : True
-Positional argument: "bar"
+Options {strParam = "foo", intParam = 42, boolFlag = True, positional = "bar"}
 
 >>> ./demo foo
-String parameter   : ""
-Integer parameter  : 0
-Boolean flag       : False
-Positional argument: "foo"
+Options {strParam = "", intParam = 0, boolFlag = False, positional = "foo"}
 
 >>> ./demo --help
 Usage: demo [options] ARG
