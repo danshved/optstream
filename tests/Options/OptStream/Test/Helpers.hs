@@ -623,6 +623,7 @@ data ParserDesc
   | DescParam ValueType [OptionForm] Metavar HelpChoice
   | DescMultiParam [OptionForm] FollowerDesc HelpChoice
   | DescFreeArg ValueType Metavar HelpChoice
+  | DescAnyArg ValueType Metavar HelpChoice
   | DescAp ParserDesc ParserDesc
   deriving (Generic)
 
@@ -658,6 +659,15 @@ toParser (DescFreeArg TypeReadInt mv (WithHelp d)) =
 toParser (DescFreeArg TypeChar mv WithoutHelp) = (:[]) <$> freeArgChar' mv
 toParser (DescFreeArg TypeChar mv (WithHelp d)) = (:[]) <$> freeArgChar mv d
 
+toParser (DescAnyArg TypeString mv WithoutHelp) = anyArg' mv
+toParser (DescAnyArg TypeString mv (WithHelp d)) = anyArg mv d
+toParser (DescAnyArg TypeReadInt mv WithoutHelp) =
+  show <$> (anyArgRead' mv :: Parser Int)
+toParser (DescAnyArg TypeReadInt mv (WithHelp d)) =
+  show <$> (anyArgRead mv d :: Parser Int)
+toParser (DescAnyArg TypeChar mv WithoutHelp) = (:[]) <$> anyArgChar' mv
+toParser (DescAnyArg TypeChar mv (WithHelp d)) = (:[]) <$> anyArgChar mv d
+
 toParser (DescAp p1 p2) = (++) <$> toParser p1 <*> toParser p2
 
 
@@ -670,6 +680,7 @@ consumes (DescFlag WithBundling fs _) = mconcat $ map withPrefix fs
 consumes (DescParam _ fs _ _) = mconcat $ map withPrefix fs
 consumes (DescMultiParam fs _ _) = mconcat $ map singleton fs
 consumes (DescFreeArg _ _ _) = freeArgs
+consumes (DescAnyArg _ _ _) = withPrefix ""
 consumes (DescAp p1 p2) = consumes p1 `union` consumes p2
 
 
@@ -720,6 +731,19 @@ instance Show ParserDesc where
   showsPrec p (DescFreeArg TypeChar mv (WithHelp d)) = showP p
     $ fmapS "(:[])" "<$>" $ appS2 "freeArgChar" mv d
 
+  showsPrec p (DescAnyArg TypeString mv WithoutHelp) = showP p
+    $ appS "anyArg'" mv
+  showsPrec p (DescAnyArg TypeString mv (WithHelp d)) = showP p
+    $ appS2 "anyArg" mv d
+  showsPrec p (DescAnyArg TypeReadInt mv WithoutHelp) = showP p
+    $ fmapS "show" "<$>" $ typeS "Parser Int" $ appS "anyArgRead'" mv
+  showsPrec p (DescAnyArg TypeReadInt mv (WithHelp d)) = showP p
+    $ fmapS "show" "<$>" $ typeS "Parser Int" $ appS2 "anyArgRead" mv d
+  showsPrec p (DescAnyArg TypeChar mv WithoutHelp) = showP p
+    $ fmapS "(:[])" "<$>" $ appS "anyArgChar'" mv
+  showsPrec p (DescAnyArg TypeChar mv (WithHelp d)) = showP p
+    $ fmapS "(:[])" "<$>" $ appS2 "anyArgChar" mv d
+
   showsPrec p (DescAp p1 p2) = showP p
     $ fmapS2 "(++)" "<$>" p1 "<*>" p2
 
@@ -736,6 +760,7 @@ instance Arbitrary ParserDesc where
     , (1, DescParam <$> arbitrary <*> arbitraryLegals <*> arbitrary <*> arbitrary)
     , (1, DescMultiParam <$> arbitraryLegals <*> arbitrary <*> arbitrary)
     , (1, DescFreeArg <$> arbitrary <*> arbitrary <*> arbitrary)
+    , (1, DescAnyArg <$> arbitrary <*> arbitrary <*> arbitrary)
     , (5, DescAp <$> arbitrary <*> arbitrary)
     ]
 
@@ -778,10 +803,16 @@ instance Arbitrary ParserDesc where
       toPar (DescFollower ((DescNext vt mv):_)) = [DescParam vt fs mv h]
       toPar _ = []
 
+  shrink (DescAnyArg vt mv h)
+    =  [DescAnyArg vt' mv h | vt' <- shrink vt]
+    ++ [DescAnyArg vt mv' h | mv' <- shrink mv]
+    ++ [DescAnyArg vt mv h' | h' <- shrink h]
+
   shrink (DescFreeArg vt mv h)
     =  [DescFreeArg vt' mv h | vt' <- shrink vt]
     ++ [DescFreeArg vt mv' h | mv' <- shrink mv]
     ++ [DescFreeArg vt mv h' | h' <- shrink h]
+    ++ [DescAnyArg vt mv h]
 
   shrink (DescAp l r)
     =  [DescAp l' r | l' <- shrink l]
@@ -808,6 +839,7 @@ data Example
   | ExMAF String [Value]
   | ExParamShort String Value
   | ExParamLong String Value
+  | ExAny Value
   | ExFree Value
   | ExAp Example Example
   deriving Show
@@ -823,6 +855,7 @@ pieces (ExMatchShort c _) = [PieceShort c]
 pieces (ExMAF s vs) = [PieceBlock $ s:map formatValue vs]
 pieces (ExParamShort s v) = [PieceBlock [s ++ formatValue v]]
 pieces (ExParamLong s v) = [PieceBlock [s ++ "=" ++ formatValue v]]
+pieces (ExAny v) = [PieceBlock [formatValue v]]
 pieces (ExFree v) = [PieceBlock [formatValue v]]
 pieces (ExAp l r) = pieces l ++ pieces r
 
@@ -846,6 +879,7 @@ output (ExMatchShort _ o) = o
 output (ExMAF _ vs) = concat $ map formatValue vs
 output (ExParamShort _ v) = formatValue v
 output (ExParamLong _ v) = formatValue v
+output (ExAny v) = formatValue v
 output (ExFree v) = formatValue v
 output (ExAp l r) = output l ++ output r
 
@@ -879,6 +913,7 @@ arbitraryEx (DescMultiParam fs (DescFollower ns) _) = do
   form <- elements fs
   vs <- sequenceA [arbitraryValue vt | DescNext vt _ <- ns]
   return $ ExMAF form vs
+arbitraryEx (DescAnyArg vt _ _) = ExAny <$> arbitraryValue vt
 arbitraryEx (DescFreeArg vt _ _) =
   ExFree <$> (arbitraryValue vt `suchThat` (isFree . formatValue))
 arbitraryEx (DescAp l r) =
@@ -893,6 +928,7 @@ shrinkEx (ExMAF s vs) = [ExMAF s vs' | vs' <- traverse genericShrink vs]
 shrinkEx (ExParamShort s v) =
   [ExParamShort s v' | v' <- genericShrink v, not . P.null $ formatValue v']
 shrinkEx (ExParamLong s v) = [ExParamLong s v' | v' <- genericShrink v]
+shrinkEx (ExAny v) = [ExAny v' | v' <- genericShrink v]
 shrinkEx (ExFree v) =
   [ExFree v' | v' <- genericShrink v, isFree $ formatValue v']
 shrinkEx (ExAp l r) = [ExAp l' r' | l' <- shrinkEx l, r' <- shrinkEx r]

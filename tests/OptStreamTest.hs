@@ -65,6 +65,11 @@ tests =
     , testProperty "NoHelp"     prop_freeArg_NoHelp
     ]
 
+  , testGroup "anyArg"
+    [ testProperty "Help"       prop_anyArg_Help
+    , testProperty "NoHelp"     prop_anyArg_NoHelp
+    ]
+
   , testGroup "multiParam"
     [ testProperty "NotMatches"  prop_multiParam_NotMatches
     , testProperty "NotEnough"   prop_multiParam_NotEnough
@@ -504,6 +509,17 @@ prop_freeArg_Help desc valueType metavar =
 
 prop_freeArg_NoHelp valueType metavar =
   getHelp (mkFreeArg WithoutHelp valueType metavar) === mempty
+
+
+
+-- * Tests for @anyArg*@
+
+prop_anyArg_Help desc valueType metavar =
+  getHelp (toParser $ DescAnyArg valueType metavar (WithHelp desc))
+  === makeFreeArgHelp metavar desc
+
+prop_anyArg_NoHelp valueType metavar =
+  getHelp (toParser $ DescAnyArg valueType metavar WithoutHelp) === mempty
 
 
 

@@ -39,6 +39,8 @@ module Options.OptStream.Raw
   , freeArgRead'
   , freeArgChar'
   , anyArg'
+  , anyArgRead'
+  , anyArgChar'
     -- ** Multi-parameters
   , multiParam'
   , RawFollower
@@ -401,7 +403,7 @@ instance SelectiveParser RawParser where
         Just apa -> case endH of
           Right (Right f) -> Just $ (fmap . fmap) f apa
           Right (Left e) -> Just . abort apa . Done $  Left e
-          Left xs -> Just . abort apa . Done $  doneMissingArg xs
+          Left xs -> Just . abort apa . Done $ doneMissingArg xs
         Nothing -> Nothing
 
   Done df <#-> Done da = Done $ df <*> da
@@ -416,7 +418,7 @@ instance SelectiveParser RawParser where
       Just apf -> case endH' of
         Right (Right a) -> Just $ (fmap . fmap) ($ a) apf
         Right (Left e) -> Just . abort apf . Done $ Left e
-        Left xs -> Just . abort apf . Done $  doneMissingArg xs
+        Left xs -> Just . abort apf . Done $ doneMissingArg xs
       Nothing -> (fmap . fmap) (pf <#->) $ inputH' ms mc
 
   Done da <-|> _ = Done da
@@ -647,6 +649,23 @@ anyArg' :: String
         -> RawParser String
            -- ^ Parser that consumes and returns the first argument it sees.
 anyArg' metavar = block metavar (Just . return)
+
+-- | See 'Options.OptStream.anyArgRead''.
+anyArgRead' :: Read a
+            => String
+               -- ^ Metavariable for error messages.
+            -> RawParser a
+               -- ^ Parser that consumes the first argument it sees and parses
+               -- it down to type @a@.
+anyArgRead' metavar = parseRead <$?> anyArg' metavar
+
+-- | See 'Options.OptStream.anyArgChar''.
+anyArgChar' :: String
+               -- ^ Metavariable for error messages.
+            -> RawParser Char
+               -- ^ Parser that consumes the first argument it sees and parses
+               -- it down to a 'Char'.
+anyArgChar' metavar = parseChar <$?> anyArg' metavar
 
 -- | Consumes any short flag. Not exported for now as usage is unclear.
 anyShort' :: String

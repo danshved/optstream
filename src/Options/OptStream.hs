@@ -113,6 +113,10 @@ module Options.OptStream
   , freeArgChar'
   , anyArg
   , anyArg'
+  , anyArgRead
+  , anyArgRead'
+  , anyArgChar
+  , anyArgChar'
     -- ** Multi-parameters
   , multiParam
   , multiParam'
@@ -906,6 +910,73 @@ anyArg' :: String
            -- ^ Parser that consumes and returns the first argument it sees.
 anyArg' = lift0 . R.anyArg'
 
+-- | Consumes /any/ command line argument and parses it down to a value of a
+-- given type @a@ that is an instance of 'Read'. Unlike 'freeArgRead' this
+-- parser will also consume arguments starting with @-@.
+--
+-- >>> let p = anyArgRead "NUM" "An integer." :: Parser Int
+-- >>> runParserIO p ["-10"]
+-- -10
+--
+-- In most cases you should prefer 'freeArgRead'. The function 'anyArgRead' is
+-- provided for completeness.
+anyArgRead :: Read a
+           => String
+              -- ^ Metavariable for help and error messages.
+           -> String
+              -- ^ Description for help.
+           -> Parser a
+              -- ^ Parser that consumes the first argument it sees and parses
+              -- it down to type @a@.
+anyArgRead = addFreeArgHelp anyArgRead'
+
+-- | Like 'anyArgRead' but doesn't generate help.
+anyArgRead' :: Read a
+            => String
+               -- ^ Metavariable for error messages.
+            -> Parser a
+               -- ^ Parser that consumes the first argument it sees and parses
+               -- it down to type @a@.
+anyArgRead' = lift0 . R.anyArgRead'
+
+-- | Consumes /any/ command line argument and parses it down to a character.
+-- Produces a failure if the argument is anything other than one character
+-- long. Unlike 'freeArgChar' this will also consume arguments starting with
+-- '-'.
+--
+-- In most cases you should prefer 'freeArgChar'. The function 'anyArgChar' is
+-- provided for completeness.
+--
+-- ==== __Example:__
+--
+-- >>> let p = anyArgChar "CHAR" "A character."
+-- >>> runParserIO p ["a"]
+-- 'a'
+--
+-- >>> runParserIO p ["-"]
+-- '-'
+--
+-- >>> runParserIO p ["abc"]
+-- <interactive>: command line error at "abc": expected one character, got 3
+--
+-- >>> runParserIO p ["--"]
+-- <interactive>: command line error at "--": expected one character, got 2
+anyArgChar :: String
+              -- ^ Metavariable for error messages.
+           -> String
+              -- ^ Description for help.
+           -> Parser Char
+              -- ^ Parser that consumes the first argument it sees and parses
+              -- it down to a 'Char'.
+anyArgChar = addFreeArgHelp anyArgChar'
+
+-- | Like 'anyArgChar' but doesn't generate help.
+anyArgChar' :: String
+               -- ^ Metavariable for error messages.
+            -> Parser Char
+               -- ^ Parser that consumes the first argument it sees and parses
+               -- it down to a 'Char'.
+anyArgChar' = lift0 . R.anyArgChar'
 
 -- *** Multi-parameters
 
