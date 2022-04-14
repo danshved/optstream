@@ -305,7 +305,7 @@ runParser = doRun CtxStart where
   doRun _   (Scan (Right (Right a)) _) [] = Right a
   doRun _   (Scan (Right (Left e)) _) [] = Left $ toParserError CtxEnd e
 
-  doRun ctx pa@(Scan _ inputH) (s:ss) = case inputH (Just s) mc of
+  doRun _ (Scan _ inputH) (s:ss) = case inputH (Just s) mc of
     Just (ConsumeBlock fpa) -> case runFollower (CtxArg s) fpa ss of
       Right (ctx', pa', ss') -> doRun ctx' pa' ss'
       Left (FollowerMissingArg v) -> Left $ MissingArgAfter (s:ss) v
