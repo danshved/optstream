@@ -881,7 +881,7 @@ freeArgChar' = lift0 . R.freeArgChar'
 -- parser will also consume arguments starting with @-@, so the following
 -- holds:
 --
--- > runParser (many (anyArg metavar desc)) xs == Right xs
+-- > runParser (many (anyArg _ _)) xs == Right xs
 --
 -- In most cases you should prefer 'freeArg'. However, 'anyArg' can be useful
 -- in certain situations, for example if you want to collect all arguments
