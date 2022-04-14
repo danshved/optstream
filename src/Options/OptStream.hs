@@ -1802,14 +1802,11 @@ withVersionIO' :: IOOps m
 withVersionIO' = lift1 . R.withVersionIO'
 
 
--- TODO: add anyArgRead et. al.
-
 -- TODO: Check laws for all instances in this file.
 -- TODO: Figure out which laws there are in SelectiveParser.
 -- TODO: (?) Identify what type of grammars we are parsing here, exactly. Does
 --       it fit the established classification?
 
--- TODO: check that REPL and code examples in Haddock run as advertised.
 -- TODO: (eventually) Figure out what other compilers we can run on, add
 --       "Portability" field to module descriptions.
 -- TODO: (?) find out how to integrate with bash auto-complete.
